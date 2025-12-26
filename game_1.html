@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Big Nick: Street Run</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+  margin: 0;
+  background: #111;
+  color: white;
+  text-align: center;
+  font-family: Arial, sans-serif;
+  touch-action: manipulation;
+}
+canvas {
+  display: block;
+  margin: auto;
+  background: linear-gradient(#0b1320, #222);
+}
+</style>
+</head>
+<body>
+
+<h1>🟦 Big Nick</h1>
+<p>Tap or SPACE to jump — Double jump enabled</p>
+
+<canvas id="game" width="900" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const groundY = 300;
+const gravity = 0.6;
+
+let score = 0;
+let highScore = localStorage.getItem("bigNickHighScore") || 0;
+let checkpoint = 0;
+let level = 1;
+let speed = 2.5;
+let gameWon = false;
+let levelIntroTimer = 120;
+
+const shirtColors = ["#2196f3","#4caf50","#9c27b0","#ff9800","#ffd700"];
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function sound(freq){
+  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value=freq; g.gain.value=0.25;
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.25);
+  o.stop(audioCtx.currentTime+0.25);
+}
+
+const player = {
+  x:120, y:groundY, vy:0, jumps:2, size:1, anim:0
+};
+
+let cars=[], buildings=[], lights=[], balloons=[];
+
+function spawnBuilding(){
+  buildings.push({x:canvas.width,w:80+Math.random()*120,h:120+Math.random()*120});
+}
+function spawnLight(){
+  lights.push({x:canvas.width});
+}
+function spawnCar(){
+  const t=[
+    {w:40,h:20,p:5,c:"#4caf50"},
+    {w:55,h:25,p:10,c:"#ff9800"},
+    {w:70,h:30,p:20,c:"#f44336"}
+  ][Math.floor(Math.random()*3)];
+  cars.push({x:canvas.width,y:groundY+15,passed:false,...t});
+}
+
+setInterval(spawnBuilding,3000);
+setInterval(spawnLight,3500);
+setInterval(spawnCar,1600);
+
+function jump(){
+  if(player.jumps>0){
+    player.vy=-14;
+    player.jumps--;
+    sound(player.jumps===1?300:450);
+    navigator.vibrate&&navigator.vibrate(20);
+  }
+}
+document.addEventListener("keydown",e=>{
+  if(e.code==="Space"||e.code==="ArrowUp") jump();
+});
+canvas.addEventListener("touchstart",e=>{
+  e.preventDefault(); audioCtx.resume(); jump();
+});
+
+function update(){
+  if(gameWon) return;
+  if(levelIntroTimer>0){ levelIntroTimer--; return; }
+
+  player.y+=player.vy; player.vy+=gravity; player.anim+=0.2;
+  if(player.y>=groundY){ player.y=groundY; player.vy=0; player.jumps=2; }
+
+  buildings.forEach(b=>b.x-=0.3);
+  lights.forEach(l=>l.x-=1);
+  cars.forEach(c=>c.x-=speed);
+
+  buildings=buildings.filter(b=>b.x+b.w>0);
+  lights=lights.filter(l=>l.x>0);
+  cars=cars.filter(c=>c.x+c.w>0);
+
+  cars.forEach(c=>{
+    if(player.x< c.x+c.w && player.x+25*player.size>c.x &&
+       player.y< c.y && player.y+80*player.size>c.y-c.h){
+      sound(120);
+      score=checkpoint;
+      cars=[];
+    }
+    if(!c.passed && c.x+c.w<player.x){
+      c.passed=true;
+      score+=c.p;
+      sound(700);
+      player.size=1+score/200;
+    }
+  });
+
+  const newLevel=Math.floor(score/50)+1;
+  if(newLevel!==level){
+    level=newLevel;
+    levelIntroTimer=120;
+    sound(600);
+  }
+
+  checkpoint=Math.floor(score/50)*50;
+  speed=2.5+level*0.6;
+
+  if(score>highScore){
+    highScore=score;
+    localStorage.setItem("bigNickHighScore",highScore);
+  }
+  if(score>=200) win();
+}
+
+function drawKid(){
+  const s=player.size,x=player.x,y=player.y,o=Math.sin(player.anim)*8;
+  ctx.strokeStyle="cyan"; ctx.lineWidth=4;
+
+  ctx.beginPath(); ctx.arc(x,y-55*s+o,12*s,0,Math.PI*2); ctx.stroke();
+
+  ctx.fillStyle="red";
+  ctx.fillRect(x-14*s,y-70*s+o,28*s,8*s);
+
+  ctx.strokeStyle=shirtColors[level-1]||"#2196f3";
+  ctx.beginPath(); ctx.moveTo(x,y-45*s); ctx.lineTo(x,y-10*s); ctx.stroke();
+
+  ctx.strokeStyle="cyan";
+  ctx.beginPath();
+  ctx.moveTo(x,y-35*s);
+  ctx.lineTo(x-20*s,y-25*s-o);
+  ctx.moveTo(x,y-35*s);
+  ctx.lineTo(x+20*s,y-25*s+o);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x,y-10*s);
+  ctx.lineTo(x-15*s,y+25*s+o);
+  ctx.moveTo(x,y-10*s);
+  ctx.lineTo(x+15*s,y+25*s-o);
+  ctx.stroke();
+}
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  buildings.forEach(b=>{
+    ctx.fillStyle="#222";
+    ctx.fillRect(b.x,groundY-b.h,b.w,b.h);
+  });
+
+  lights.forEach(l=>{
+    ctx.fillStyle="#555";
+    ctx.fillRect(l.x,groundY-80,10,80);
+    ctx.fillStyle="red";
+    ctx.beginPath(); ctx.arc(l.x+5,groundY-70,5,0,Math.PI*2); ctx.fill();
+  });
+
+  ctx.fillStyle="#444";
+  ctx.fillRect(0,groundY+20,canvas.width,20);
+
+  cars.forEach(c=>{
+    ctx.fillStyle=c.c;
+    ctx.fillRect(c.x,c.y-c.h,c.w,c.h);
+    ctx.fillStyle="#000";
+    ctx.beginPath();
+    ctx.arc(c.x+10,c.y,6,0,Math.PI*2);
+    ctx.arc(c.x+c.w-10,c.y,6,0,Math.PI*2);
+    ctx.fill();
+  });
+
+  drawKid();
+
+  ctx.fillStyle="white";
+  ctx.font="18px Arial";
+  ctx.fillText(`Score: ${score}`,20,25);
+  ctx.fillText(`Level: ${level}`,140,25);
+  ctx.fillText(`High: ${highScore}`,canvas.width-140,25);
+
+  if(levelIntroTimer>0){
+    ctx.fillStyle="rgba(0,0,0,0.6)";
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle="white";
+    ctx.font="36px Arial";
+    ctx.fillText(`Level ${level}`,380,180);
+  }
+}
+
+function win(){
+  gameWon=true; sound(900);
+  balloons=Array.from({length:30},()=>({
+    x:Math.random()*canvas.width,
+    y:canvas.height+Math.random()*200,
+    c:`hsl(${Math.random()*360},100%,60%)`
+  }));
+  const i=setInterval(()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    balloons.forEach(b=>{
+      b.y-=2;
+      ctx.fillStyle=b.c;
+      ctx.beginPath(); ctx.arc(b.x,b.y,10,0,Math.PI*2); ctx.fill();
+    });
+    ctx.fillStyle="white";
+    ctx.font="36px Arial";
+    ctx.fillText("You win!",360,150);
+    ctx.font="26px Arial";
+    ctx.fillText("Now go touch grass!",250,200);
+  },16);
+  setTimeout(()=>{clearInterval(i);location.reload();},5000);
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+loop();
+</script>
+
+</body>
+</html>
