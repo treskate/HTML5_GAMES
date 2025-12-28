@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Big Nick's Adventure</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #1a1a1a;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            touch-action: none;
+        }
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(to bottom, #2c3e50, #000000);
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            padding: 20px;
+            box-sizing: border-box;
+            color: white;
+            pointer-events: none;
+            text-transform: uppercase;
+            font-weight: 900;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .score-container { display: flex; justify-content: space-between; font-size: 24px; }
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 100%;
+            font-size: 32px;
+            color: #00ffcc;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div class="score-container">
+        <div id="score">Points: 0</div>
+        <div id="highScore">High Score: 0</div>
+    </div>
+    <div id="message">250 points to win the game!</div>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('highScore');
+const messageEl = document.getElementById('message');
+
+// Game State
+let score = 0;
+let highScore = localStorage.getItem('nickHighScore') || 0;
+let gameOver = false;
+let gameWon = false;
+let gameSpeed = 5;
+let obstacles = [];
+let frame = 0;
+
+// Character Setup
+const nick = {
+    x: 50,
+    y: 0,
+    baseWidth: 40,
+    baseHeight: 60,
+    width: 40,
+    height: 60,
+    dy: 0,
+    jumpForce: 12,
+    gravity: 0.6,
+    grounded: false,
+    jumpCount: 0,
+    sizeMultiplier: 1,
+    animFrame: 0
+};
+
+// Audio Setup (Synthetic sounds to avoid external files)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playJumpSound() {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.1);
+}
+
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    nick.y = canvas.height - 150;
+}
+
+window.addEventListener('resize', resize);
+resize();
+
+// Input
+function handleJump() {
+    if (gameOver) return resetGame();
+    if (nick.jumpCount < 2) {
+        nick.dy = -nick.jumpForce;
+        nick.jumpCount++;
+        playJumpSound();
+    }
+}
+
+window.addEventListener('touchstart', (e) => { e.preventDefault(); handleJump(); }, {passive: false});
+window.addEventListener('keydown', (e) => { if(e.code === 'Space') handleJump(); });
+
+function resetGame() {
+    score = 0;
+    nick.sizeMultiplier = 1;
+    nick.width = nick.baseWidth;
+    nick.height = nick.baseHeight;
+    obstacles = [];
+    gameOver = false;
+    gameWon = false;
+    messageEl.innerHTML = "250 points to win the game!";
+    loop();
+}
+
+class Obstacle {
+    constructor() {
+        const types = [
+            { name: 'Keyboard', pts: 5, w: 60, h: 20, color: '#555' },
+            { name: 'Laptop', pts: 10, w: 50, h: 40, color: '#888' },
+            { name: 'Computer', pts: 15, w: 50, h: 70, color: '#aaa' }
+        ];
+        const type = types[Math.floor(Math.random() * types.length)];
+        this.x = canvas.width;
+        this.y = canvas.height - 100 - type.h;
+        this.w = type.w;
+        this.h = type.h;
+        this.pts = type.pts;
+        this.color = type.color;
+        this.onFire = Math.random() > 0.7;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, this.w, this.h);
+        if (this.onFire) {
+            ctx.fillStyle = '#ff4500';
+            ctx.fillRect(this.x, this.y - 10, this.w, 10);
+        }
+    }
+
+    update() {
+        this.x -= gameSpeed;
+    }
+}
+
+function drawNick() {
+    nick.animFrame += 0.1;
+    const legSwing = Math.sin(nick.animFrame) * 10;
+    
+    ctx.save();
+    ctx.translate(nick.x, nick.y);
+    
+    // Pants (Blue)
+    ctx.fillStyle = '#0044ff';
+    ctx.fillRect(0, nick.height * 0.6, nick.width, nick.height * 0.3);
+    
+    // Shirt (Red)
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(0, nick.height * 0.2, nick.width, nick.height * 0.4);
+    
+    // Head/Skin
+    ctx.fillStyle = '#ffdbac';
+    ctx.fillRect(nick.width * 0.2, 0, nick.width * 0.6, nick.height * 0.2);
+    
+    // Cap (Black Backwards)
+    ctx.fillStyle = '#000';
+    ctx.fillRect(nick.width * 0.1, -5, nick.width * 0.7, 10); // cap base
+    ctx.fillRect(nick.width * 0.8, 0, 10, 5); // brim facing back
+    
+    ctx.restore();
+}
+
+function drawBackground() {
+    // City Buildings
+    ctx.fillStyle = '#1a1a2e';
+    for(let i=0; i<5; i++) {
+        ctx.fillRect(i * 250 - (frame % 250), canvas.height - 400, 150, 300);
+    }
+    
+    // Street (Black with Yellow Lines)
+    ctx.fillStyle = '#111';
+    ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
+    ctx.fillStyle = '#ffd700';
+    for(let i=0; i<10; i++) {
+        ctx.fillRect(i * 150 - (frame * gameSpeed % 150), canvas.height - 55, 60, 10);
+    }
+}
+
+function update() {
+    if (gameOver) return;
+
+    frame++;
+    nick.dy += nick.gravity;
+    nick.y += nick.dy;
+
+    const groundLevel = canvas.height - 100 - nick.height;
+    if (nick.y > groundLevel) {
+        nick.y = groundLevel;
+        nick.dy = 0;
+        nick.jumpCount = 0;
+    }
+
+    if (frame % 100 === 0) obstacles.push(new Obstacle());
+
+    obstacles.forEach((obs, index) => {
+        obs.update();
+        if (obs.x + obs.w < 0) {
+            score += obs.pts;
+            nick.sizeMultiplier += 0.1;
+            nick.width = nick.baseWidth * nick.sizeMultiplier;
+            nick.height = nick.baseHeight * nick.sizeMultiplier;
+            obstacles.splice(index, 1);
+            
+            if (score >= 250 && !gameWon) {
+                gameWon = true;
+                messageEl.innerHTML = "Great job. Now go touch grass, brah!";
+            }
+        }
+
+        // Collision
+        if (nick.x < obs.x + obs.w && nick.x + nick.width > obs.x &&
+            nick.y < obs.y + obs.h && nick.y + nick.height > obs.y) {
+            gameOver = true;
+            messageEl.innerHTML = "Game Over! Tap to Restart";
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('nickHighScore', highScore);
+            }
+        }
+    });
+
+    scoreEl.innerHTML = `Points: ${score}`;
+    highScoreEl.innerHTML = `High Score: ${highScore}`;
+}
+
+function loop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    obstacles.forEach(obs => obs.draw());
+    drawNick();
+    update();
+    if (!gameOver) requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+</body>
+</html>
