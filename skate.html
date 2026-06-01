@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Canvas Skate & Draw - Infinite Camera</title>
+    <title>Canvas Skate & Draw - PlayStation Edition</title>
     <style>
         body {
             margin: 0;
@@ -32,46 +32,80 @@
             display: block;
             background: #222;
         }
+        
+        /* Layout for Gamepad Interface */
         #controls {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             left: 5%;
             right: 5%;
             display: flex;
             justify-content: space-between;
+            align-items: center;
             z-index: 10;
+            pointer-events: none;
         }
-        .btn-group {
+        .interactive { pointer-events: auto; }
+
+        /* Left side Directional Pad */
+        .dpad {
             display: flex;
             gap: 15px;
         }
-        .btn {
+        .btn-dir {
             width: 65px;
             height: 65px;
-            background: rgba(255, 255, 255, 0.15);
-            border: 2px solid rgba(255, 255, 255, 0.4);
+            background: rgba(40, 40, 40, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.2);
             border-radius: 50%;
             color: white;
-            font-size: 20px;
-            font-weight: bold;
+            font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(4px);
-            touch-action: none;
         }
-        .btn:active {
+        .btn-dir:active {
             background: rgba(0, 255, 204, 0.4);
             border-color: #00ffcc;
         }
-        #btn-kickflip {
-            background: rgba(255, 51, 102, 0.2);
-            border-color: rgba(255, 51, 102, 0.5);
+
+        /* Right side Action Button Diamond Cluster */
+        .ps-cluster {
+            position: relative;
+            width: 170px;
+            height: 170px;
         }
-        #btn-kickflip:active {
-            background: rgba(255, 51, 102, 0.6);
-            border-color: #ff3366;
+        .ps-btn {
+            position: absolute;
+            width: 52px;
+            height: 52px;
+            background: #111;
+            border: 3px solid #333;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
         }
+        
+        /* Triangle (Top) */
+        #btn-triangle { top: 0; left: 59px; color: #41ffb7; border-color: #1b855a; }
+        #btn-triangle:active { background: rgba(65, 255, 183, 0.4); }
+        
+        /* Square (Left) */
+        #btn-square { top: 59px; left: 0; color: #f4add5; border-color: #9c5880; font-size: 20px; }
+        #btn-square:active { background: rgba(244, 173, 213, 0.4); }
+        
+        /* Circle (Right) */
+        #btn-circle { top: 59px; right: 0; color: #f26666; border-color: #a63232; }
+        #btn-circle:active { background: rgba(242, 102, 102, 0.4); }
+        
+        /* Cross (Bottom) */
+        #btn-cross { bottom: 0; left: 59px; color: #8fa1f0; border-color: #3b4e9e; }
+        #btn-cross:active { background: rgba(143, 161, 240, 0.4); }
+
         #btn-clear {
             position: absolute;
             top: 10px;
@@ -88,19 +122,25 @@
 <body>
 
     <div id="ui">
-        <h1>Sketch & Skate (Infinite)</h1>
-        <p><strong>1 Finger / Left Click:</strong> Draw ramps / Tap to spawn</p>
-        <p><strong>2 Fingers / Right Click Drag:</strong> Pan camera view</p>
+        <h1>Sketch & Skate: PS Controller Edition</h1>
+        <p><strong>▢ (Pink):</strong> Kickflip | <strong>✕ (Blue):</strong> Ollie</p>
+        <p><strong>◯ (Red):</strong> Indy Grab | <strong>Δ (Green):</strong> 360 Spin</p>
     </div>
 
-    <button id="btn-clear" class="btn">Clear</button>
+    <button id="btn-clear" class="btn-dir interactive">Clear Track</button>
 
     <div id="controls">
-        <div class="btn-group">
-            <div id="btn-left" class="btn">◀</div>
-            <div id="btn-right" class="btn">▶</div>
+        <div class="dpad interactive">
+            <div id="btn-left" class="btn-dir">◀</div>
+            <div id="btn-right" class="btn-dir">▶</div>
         </div>
-        <div id="btn-kickflip" class="btn">K</div>
+        
+        <div class="ps-cluster interactive">
+            <div id="btn-triangle" class="ps-btn">Δ</div>
+            <div id="btn-square" class="ps-btn">▢</div>
+            <div id="btn-circle" class="ps-btn">◯</div>
+            <div id="btn-cross" class="ps-btn">✕</div>
+        </div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -116,324 +156,318 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // Game State & Global Camera Offset
+        // --- Sound FX Engine ---
+        let audioCtx = null;
+        function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+
+        function playOllieSound() {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(380, audioCtx.currentTime + 0.08);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function playKickflipSound() {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(550, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(950, audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playGrabSound() {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.25);
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.25);
+        }
+
+        function playSpinSound() {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+        }
+
+        function playCrashSound() {
+            initAudio(); if (!audioCtx) return;
+            const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(90, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(20, audioCtx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+        }
+
+        // --- Game Setup ---
         let lines = [];
-        let isDrawing = false;
-        let isPanning = false;
-        
-        let cameraX = 0; // Tracks the camera offset scrolling position
-        let startPoint = { x: 0, y: 0 };
-        let panStartPoint = { x: 0, y: 0 };
-        let touchStartPos = { x: 0, y: 0 };
+        let isDrawing = false, isPanning = false;
+        let cameraX = 0;
+        let startPoint = { x: 0, y: 0 }, panStartPoint = { x: 0, y: 0 }, touchStartPos = { x: 0, y: 0 };
         let hasMovedSignificantly = false;
 
         const skater = {
             x: 0, y: 0, vx: 0, vy: 0, radius: 12, angle: 0, angularVelocity: 0,
             isActive: false, isOnGround: false, gravity: 0.3, friction: 0.99, airResistance: 0.995,
-            isKickflipping: false, kickflipTimer: 0, kickflipDuration: 20, boardFlipAngle: 0
+            
+            // Trick configurations
+            isKickflipping: false, kickflipTimer: 0, kickflipDuration: 18, boardFlipAngle: 0,
+            isGrabbing: false, grabTimer: 0,
+            isSpinning360: false, spinTimer: 0, spinDuration: 24, spinBaseAngle: 0
         };
 
         const keys = { Left: false, Right: false };
 
         function spawnSkater(screenX, screenY) {
-            // Account for camera offset when calculating the world coordinates to spawn
-            skater.x = screenX + cameraX;
-            skater.y = screenY;
-            skater.vx = 0;
-            skater.vy = 0;
-            skater.angle = 0;
-            skater.angularVelocity = 0;
-            skater.isKickflipping = false;
-            skater.boardFlipAngle = 0;
+            initAudio();
+            skater.x = screenX + cameraX; skater.y = screenY;
+            skater.vx = 0; skater.vy = 0; skater.angle = 0; skater.angularVelocity = 0;
+            skater.isKickflipping = false; skater.isGrabbing = false; skater.isSpinning360 = false;
             skater.isActive = true;
         }
 
         function triggerKickflip() {
             if (skater.isActive && !skater.isOnGround && !skater.isKickflipping) {
-                skater.isKickflipping = true;
-                skater.kickflipTimer = 0;
-                skater.vy -= 1.5; 
+                skater.isKickflipping = true; skater.kickflipTimer = 0; skater.vy = -4.0;
+                playKickflipSound();
             }
         }
 
-        // --- Inputs ---
+        function triggerOllie() {
+            if (skater.isActive) {
+                skater.vy = -6.5; skater.isOnGround = false;
+                playOllieSound();
+                skater.isKickflipping = false; skater.isGrabbing = false;
+            }
+        }
+
+        function triggerIndyGrab() {
+            if (skater.isActive && !skater.isOnGround) {
+                skater.isGrabbing = true; skater.grabTimer = 15; // stays grabbed for 15 frames
+                playGrabSound();
+            }
+        }
+
+        function trigger360Spin() {
+            if (skater.isActive && !skater.isOnGround && !skater.isSpinning360) {
+                skater.isSpinning360 = true; skater.spinTimer = 0;
+                skater.spinBaseAngle = skater.angle; skater.vy = -5.0;
+                playSpinSound();
+            }
+        }
+
+        // --- Keyboard Fallbacks ---
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.Left = true;
             if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.Right = true;
             if (e.key === ' ') spawnSkater(window.innerWidth / 2, 100);
             if (e.key.toLowerCase() === 'r') { lines = []; cameraX = 0; skater.isActive = false; }
             if (e.key.toLowerCase() === 'k') triggerKickflip();
+            if (e.key.toLowerCase() === 'x') triggerOllie();
+            if (e.key.toLowerCase() === 'o') triggerIndyGrab();
+            if (e.key.toLowerCase() === 't') trigger360Spin();
         });
         window.addEventListener('keyup', (e) => {
             if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') keys.Left = false;
             if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') keys.Right = false;
         });
 
-        // Block context menu on right click so we can use it to pan seamlessly
         window.addEventListener('contextmenu', e => e.preventDefault());
 
-        const bLeft = document.getElementById('btn-left');
-        const bRight = document.getElementById('btn-right');
-        const bFlip = document.getElementById('btn-kickflip');
-        const bClear = document.getElementById('btn-clear');
+        // --- Mobile Touch Mapping ---
+        document.getElementById('btn-left').addEventListener('touchstart', (e) => { e.preventDefault(); keys.Left = true; });
+        document.getElementById('btn-left').addEventListener('touchend', () => keys.Left = false);
+        document.getElementById('btn-right').addEventListener('touchstart', (e) => { e.preventDefault(); keys.Right = true; });
+        document.getElementById('btn-right').addEventListener('touchend', () => keys.Right = false);
+        
+        document.getElementById('btn-square').addEventListener('touchstart', (e) => { e.preventDefault(); triggerKickflip(); });
+        document.getElementById('btn-cross').addEventListener('touchstart', (e) => { e.preventDefault(); triggerOllie(); });
+        document.getElementById('btn-circle').addEventListener('touchstart', (e) => { e.preventDefault(); triggerIndyGrab(); });
+        document.getElementById('btn-triangle').addEventListener('touchstart', (e) => { e.preventDefault(); trigger360Spin(); });
+        
+        document.getElementById('btn-clear').addEventListener('click', () => { lines = []; cameraX = 0; skater.isActive = false; });
 
-        bLeft.addEventListener('touchstart', (e) => { e.preventDefault(); keys.Left = true; });
-        bLeft.addEventListener('touchend', () => keys.Left = false);
-        bRight.addEventListener('touchstart', (e) => { e.preventDefault(); keys.Right = true; });
-        bRight.addEventListener('touchend', () => keys.Right = false);
-        bFlip.addEventListener('touchstart', (e) => { e.preventDefault(); triggerKickflip(); });
-        bClear.addEventListener('touchstart', (e) => { e.preventDefault(); lines = []; cameraX = 0; skater.isActive = false; });
-        bClear.addEventListener('click', () => { lines = []; cameraX = 0; skater.isActive = false; });
-
-        // --- Input Controller Engine Supporting Pan Mechanics ---
+        // --- Track Builder Layout Controls ---
         function handlePointerDown(e) {
             if (e.target.closest('#controls') || e.target.closest('#btn-clear')) return;
+            const isTouch = e.touches !== undefined, count = isTouch ? e.touches.length : 0;
 
-            const isTouchEvent = e.touches !== undefined;
-            const touchCount = isTouchEvent ? e.touches.length : 0;
-
-            // Trigger Panning Mode: Right Click (button 2) OR Two Finger Drag
-            if ((!isTouchEvent && e.button === 2) || (isTouchEvent && touchCount === 2)) {
-                isDrawing = false;
-                isPanning = true;
-                const clientX = isTouchEvent ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
-                panStartPoint.x = clientX;
+            if ((!isTouch && e.button === 2) || (isTouch && count === 2)) {
+                isDrawing = false; isPanning = true;
+                panStartPoint.x = isTouch ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
                 return;
             }
-
-            // Normal Drawing Mode: Left Click or One Finger Touch
-            if (!isPanning && (!isTouchEvent || touchCount === 1)) {
+            if (!isPanning && (!isTouch || count === 1)) {
                 isDrawing = true;
-                const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
-                const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
-                
-                // Add camera offset context to the permanent drawn line values
-                startPoint = { x: clientX + cameraX, y: clientY };
-                touchStartPos = { x: clientX, y: clientY };
+                const cx = isTouch ? e.touches[0].clientX : e.clientX, cy = isTouch ? e.touches[0].clientY : e.clientY;
+                startPoint = { x: cx + cameraX, y: cy }; touchStartPos = { x: cx, y: cy };
                 hasMovedSignificantly = false;
             }
         }
 
         function handlePointerMove(e) {
-            const isTouchEvent = e.touches !== undefined;
-
+            const isTouch = e.touches !== undefined;
             if (isPanning) {
-                const clientX = isTouchEvent ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
-                const dx = clientX - panStartPoint.x;
-                cameraX -= dx; // Moves camera opposite direction of drag
-                panStartPoint.x = clientX;
+                const cx = isTouch ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
+                cameraX -= (cx - panStartPoint.x); panStartPoint.x = cx;
                 return;
             }
-
             if (!isDrawing) return;
-            const clientX = isTouchEvent ? e.touches[0].clientX : e.clientX;
-            const clientY = isTouchEvent ? e.touches[0].clientY : e.clientY;
-
-            const distFromStart = Math.hypot(clientX - touchStartPos.x, clientY - touchStartPos.y);
-            if (distFromStart > 10) hasMovedSignificantly = true;
+            const cx = isTouch ? e.touches[0].clientX : e.clientX, cy = isTouch ? e.touches[0].clientY : e.clientY;
+            if (Math.hypot(cx - touchStartPos.x, cy - touchStartPos.y) > 10) hasMovedSignificantly = true;
 
             if (hasMovedSignificantly) {
-                const worldX = clientX + cameraX;
-                const dist = Math.hypot(worldX - startPoint.x, clientY - startPoint.y);
-                if (dist > 5) {
-                    lines.push({ p1: { ...startPoint }, p2: { x: worldX, y: clientY } });
-                    startPoint = { x: worldX, y: clientY };
+                const wx = cx + cameraX;
+                if (Math.hypot(wx - startPoint.x, cy - startPoint.y) > 5) {
+                    lines.push({ p1: { ...startPoint }, p2: { x: wx, y: cy } });
+                    startPoint = { x: wx, y: cy };
                 }
             }
         }
 
-        function handlePointerUp(e) {
-            if (isPanning) {
-                // If using touch, keep panning active until all fingers lift
-                if (e.touches && e.touches.length > 0) return;
-                isPanning = false;
-                return;
-            }
-
-            if (!isDrawing) return;
-            isDrawing = false;
-
-            if (!hasMovedSignificantly) {
-                spawnSkater(touchStartPos.x, touchStartPos.y);
-            }
+        function handlePointerUp() {
+            if (isPanning) { isPanning = false; return; }
+            if (!isDrawing) return; isDrawing = false;
+            if (!hasMovedSignificantly) spawnSkater(touchStartPos.x, touchStartPos.y);
         }
 
-        window.addEventListener('mousedown', handlePointerDown);
-        window.addEventListener('mousemove', handlePointerMove);
-        window.addEventListener('mouseup', handlePointerUp);
+        window.addEventListener('mousedown', handlePointerDown); window.addEventListener('mousemove', handlePointerMove); window.addEventListener('mouseup', handlePointerUp);
+        window.addEventListener('touchstart', handlePointerDown, { passive: false }); window.addEventListener('touchmove', handlePointerMove, { passive: false }); window.addEventListener('touchend', handlePointerUp, { passive: false });
 
-        window.addEventListener('touchstart', handlePointerDown, { passive: false });
-        window.addEventListener('touchmove', handlePointerMove, { passive: false });
-        window.addEventListener('touchend', handlePointerUp, { passive: false });
-
-
-        // --- Physics Engine ---
+        // --- Physics Logic ---
         function closestPointOnSegment(p, a, b) {
-            const ab = { x: b.x - a.x, y: b.y - a.y };
-            const ap = { x: p.x - a.x, y: p.y - a.y };
+            const ab = { x: b.x - a.x, y: b.y - a.y }, ap = { x: p.x - a.x, y: p.y - a.y };
             let t = (ap.x * ab.x + ap.y * ab.y) / (ab.x * ab.x + ab.y * ab.y);
-            t = Math.max(0, Math.min(1, t));
-            return { x: a.x + t * ab.x, y: a.y + t * ab.y };
+            return { x: a.x + Math.max(0, Math.min(1, t)) * ab.x, y: a.y + Math.max(0, Math.min(1, t)) * ab.y };
         }
 
         function update() {
-            if (skater.isActive) {
-                skater.vy += skater.gravity;
+            if (!skater.isActive) return;
+            skater.vy += skater.gravity;
 
-                if (keys.Left) {
-                    skater.angularVelocity -= 0.007;
-                    if (skater.isOnGround) skater.vx -= 0.18;
-                }
-                if (keys.Right) {
-                    skater.angularVelocity += 0.007;
-                    if (skater.isOnGround) skater.vx += 0.18;
-                }
+            if (keys.Left) { skater.angularVelocity -= 0.007; if (skater.isOnGround) skater.vx -= 0.18; }
+            if (keys.Right) { skater.angularVelocity += 0.007; if (skater.isOnGround) skater.vx += 0.18; }
 
-                skater.x += skater.vx;
-                skater.y += skater.vy;
+            skater.x += skater.vx; skater.y += skater.vy;
+            
+            // Handle standard vs trick rotation logic
+            if (skater.isSpinning360) {
+                skater.spinTimer++;
+                const ratio = skater.spinTimer / skater.spinDuration;
+                skater.angle = skater.spinBaseAngle + ratio * Math.PI * 2;
+                if (skater.spinTimer >= skater.spinDuration) skater.isSpinning360 = false;
+            } else {
                 skater.angle += skater.angularVelocity;
-
-                skater.vx *= skater.isOnGround ? skater.friction : skater.airResistance;
-                skater.vy *= skater.airResistance;
-                skater.angularVelocity *= 0.94;
-
-                if (skater.isKickflipping) {
-                    skater.kickflipTimer++;
-                    const progress = skater.kickflipTimer / skater.kickflipDuration;
-                    skater.boardFlipAngle = progress * Math.PI * 2;
-
-                    if (skater.kickflipTimer >= skater.kickflipDuration) {
-                        skater.isKickflipping = false;
-                        skater.boardFlipAngle = 0;
-                    }
-                }
-
-                skater.isOnGround = false;
-
-                lines.forEach(line => {
-                    const closest = closestPointOnSegment(skater, line.p1, line.p2);
-                    const distX = skater.x - closest.x;
-                    const distY = skater.y - closest.y;
-                    const distance = Math.hypot(distX, distY);
-
-                    if (distance < skater.radius) {
-                        if (skater.isKickflipping) {
-                            skater.isActive = false; // Wipe out!
-                            return;
-                        }
-
-                        skater.isOnGround = true;
-                        let nx = distX / (distance || 1);
-                        let ny = distY / (distance || 1);
-
-                        const penetration = skater.radius - distance;
-                        skater.x += nx * penetration;
-                        skater.y += ny * penetration;
-
-                        const dotProduct = skater.vx * nx + skater.vy * ny;
-                        if (dotProduct < 0) {
-                            skater.vx -= dotProduct * nx * 1.2;
-                            skater.vy -= dotProduct * ny * 1.2;
-                        }
-
-                        const surfaceAngle = Math.atan2(line.p2.y - line.p1.y, line.p2.x - line.p1.x);
-                        let diff = surfaceAngle - skater.angle;
-                        diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-                        skater.angle += diff * 0.2; 
-                    }
-                });
-
-                // Bottom bound wipeout test (Left/Right is now infinite, so boundary check is dropped)
-                if (skater.y > canvas.height + 300) {
-                    skater.isActive = false;
-                }
-            }
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.save();
-            // Core camera operation: slides all elements drawn inside this matrix block
-            ctx.translate(-cameraX, 0);
-
-            // Draw Parallax Grid Background relative to camera step
-            ctx.strokeStyle = '#2d2d2d';
-            ctx.lineWidth = 1;
-            const startGridX = Math.floor(cameraX / 40) * 40;
-            for(let x = startGridX; x < startGridX + canvas.width + 40; x += 40) { 
-                ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); 
-            }
-            for(let y = 0; y < canvas.height; y += 40) { 
-                ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX + canvas.width, y); ctx.stroke(); 
             }
 
-            // Draw Infinite Ramps
-            ctx.strokeStyle = '#00ffcc';
-            ctx.lineWidth = 5;
-            ctx.lineCap = 'round';
+            skater.vx *= skater.isOnGround ? skater.friction : skater.airResistance;
+            skater.vy *= skater.airResistance;
+            skater.angularVelocity *= 0.94;
+
+            if (skater.isKickflipping) {
+                skater.kickflipTimer++;
+                skater.boardFlipAngle = (skater.kickflipTimer / skater.kickflipDuration) * Math.PI * 2;
+                if (skater.kickflipTimer >= skater.kickflipDuration) { skater.isKickflipping = false; skater.boardFlipAngle = 0; }
+            }
+            if (skater.grabTimer > 0) skater.grabTimer--; else skater.isGrabbing = false;
+
+            skater.isOnGround = false;
+
             lines.forEach(line => {
-                ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke();
+                const closest = closestPointOnSegment(skater, line.p1, line.p2);
+                const distX = skater.x - closest.x, distY = skater.y - closest.y, dist = Math.hypot(distX, distY);
+
+                if (dist < skater.radius) {
+                    if (skater.isKickflipping || skater.isSpinning360) { skater.isActive = false; playCrashSound(); return; }
+
+                    skater.isOnGround = true;
+                    let nx = distX / (dist || 1), ny = distY / (dist || 1);
+                    skater.x += nx * (skater.radius - dist); skater.y += ny * (skater.radius - dist);
+
+                    const dot = skater.vx * nx + skater.vy * ny;
+                    if (dot < 0) { skater.vx -= dot * nx * 1.2; skater.vy -= dot * ny * 1.2; }
+
+                    const surfaceAngle = Math.atan2(line.p2.y - line.p1.y, line.p2.x - line.p1.x);
+                    let diff = Math.atan2(Math.sin(surfaceAngle - skater.angle), Math.cos(surfaceAngle - skater.angle));
+                    skater.angle += diff * 0.2;
+                }
             });
 
-            // Draw Skater
-            if (skater.isActive) {
-                ctx.save();
-                ctx.translate(skater.x, skater.y);
-                ctx.rotate(skater.angle);
+            if (skater.y > canvas.height + 300) { skater.isActive = false; playCrashSound(); }
+        }
 
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.moveTo(-5, 4); ctx.lineTo(0, -8);
-                ctx.moveTo(5, 4); ctx.lineTo(0, -8);
-                ctx.lineTo(0, -22);
-                ctx.arc(0, -26, 4, 0, Math.PI * 2);
-                if (skater.isKickflipping) {
-                    ctx.moveTo(0, -18); ctx.lineTo(-12, -26);
-                    ctx.moveTo(0, -18); ctx.lineTo(12, -26);
+        // --- Render Engine ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save(); ctx.translate(-cameraX, 0);
+
+            // Grid
+            ctx.strokeStyle = '#2d2d2d'; ctx.lineWidth = 1;
+            const startGridX = Math.floor(cameraX / 40) * 40;
+            for(let x = startGridX; x < startGridX + canvas.width + 40; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
+            for(let y = 0; y < canvas.height; y += 40) { ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX + canvas.width, y); ctx.stroke(); }
+
+            // Ramps
+            ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+            lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke(); });
+
+            // Rider
+            if (skater.isActive) {
+                ctx.save(); ctx.translate(skater.x, skater.y); ctx.rotate(skater.angle);
+
+                // Stickman Body Structure
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath();
+                
+                if (skater.isGrabbing) {
+                    // Indy Grab Crouch Position Animation
+                    ctx.moveTo(-5, 4); ctx.lineTo(-2, -4); ctx.lineTo(0, -12); // bent legs
+                    ctx.moveTo(5, 4); ctx.lineTo(2, -4); ctx.lineTo(0, -12);
+                    ctx.lineTo(0, -22); ctx.arc(0, -26, 4, 0, Math.PI * 2); // spine/head
+                    ctx.moveTo(0, -18); ctx.lineTo(3, 4); // Arm down holding center rail!
                 } else {
-                    ctx.moveTo(0, -18); ctx.lineTo(-10, -14);
-                    ctx.moveTo(0, -18); ctx.lineTo(10, -14);
+                    // Regular stance position
+                    ctx.moveTo(-5, 4); ctx.lineTo(0, -8); ctx.moveTo(5, 4); ctx.lineTo(0, -8); ctx.lineTo(0, -22); ctx.arc(0, -26, 4, 0, Math.PI * 2);
+                    if (skater.isKickflipping || skater.isSpinning360) {
+                        ctx.moveTo(0, -18); ctx.lineTo(-12, -26); ctx.moveTo(0, -18); ctx.lineTo(12, -26);
+                    } else {
+                        ctx.moveTo(0, -18); ctx.lineTo(-10, -14); ctx.moveTo(0, -18); ctx.lineTo(10, -14);
+                    }
                 }
                 ctx.stroke();
 
-                ctx.save();
-                ctx.translate(0, 6);
-                if (skater.isKickflipping) {
-                    ctx.scale(1, Math.cos(skater.boardFlipAngle));
-                }
+                // Deck Processing
+                ctx.save(); ctx.translate(0, 6);
+                if (skater.isKickflipping) ctx.scale(1, Math.cos(skater.boardFlipAngle));
 
-                ctx.fillStyle = '#ff3366';
-                ctx.fillRect(-18, -2.5, 36, 5);
-
-                ctx.fillStyle = '#ffffff';
-                ctx.beginPath(); ctx.arc(-10, 4, 3, 0, Math.PI * 2); ctx.fill();
-                ctx.beginPath(); ctx.arc(10, 4, 3, 0, Math.PI * 2); ctx.fill();
-                
-                ctx.restore();
-                ctx.restore();
+                ctx.fillStyle = '#ff3366'; ctx.fillRect(-18, -2.5, 36, 5); // Deck
+                ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-10, 4, 3, 0, Math.PI * 2); ctx.arc(10, 4, 3, 0, Math.PI * 2); ctx.fill(); // Wheels
+                ctx.restore(); ctx.restore();
             }
-
-            ctx.restore(); // Exit camera transformation matrix
-
-            // Draw active temporary sketch line guide (drawn on screen space, not world space)
-            if (isDrawing) {
-                ctx.strokeStyle = 'rgba(0, 255, 204, 0.4)';
-                ctx.lineWidth = 3;
-                ctx.beginPath(); 
-                ctx.moveTo(startPoint.x - cameraX, startPoint.y); 
-                ctx.lineTo(touchStartPos.x + (startPoint.x - cameraX - touchStartPos.x), startPoint.y); // dynamic recalculation
-                // Fallback direct draw for clarity
-                ctx.clearRect(0,0,0,0); 
-            }
+            ctx.restore();
         }
 
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
+        function loop() { update(); draw(); requestAnimationFrame(loop); }
         loop();
     </script>
 </body>
