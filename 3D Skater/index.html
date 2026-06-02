@@ -92,7 +92,7 @@
             font-family: Arial, sans-serif;
             user-select: none;
             -webkit-user-select: none;
-            display: none; /* Auto-detected via JS */
+            display: none;
             justify-content: center;
             align-items: center;
             text-shadow: 1px 1px 3px #000;
@@ -139,7 +139,6 @@
         </div>
     </div>
 
-    <!-- Mobile Screen Elements -->
     <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
     <div id="btn-ollie" class="mobile-btn">OLLIE</div>
     <div id="btn-kickflip" class="mobile-btn">FLIP</div>
@@ -147,18 +146,17 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
 
     <script>
-        // Detection for Mobile/iPhone
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         if(isMobile) {
             document.querySelectorAll('.mobile-btn').forEach(el => el.style.display = 'flex');
         }
 
-        // --- Game Engine Setup ---
+        // --- Game Variables ---
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
         let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
 
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.005);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.004);
         scene.background = new THREE.Color(0x87CEEB);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -167,15 +165,13 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- Audio Synthesizer Engine ---
+        // --- Audio Synthesizer ---
         let audioCtx = null;
         let grindNoiseNode = null;
         let grindGainNode = null;
 
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             if (audioCtx.state === 'suspended') audioCtx.resume();
         }
 
@@ -187,7 +183,7 @@
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(130, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(380, audioCtx.currentTime + 0.12);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
             osc.start(); osc.stop(audioCtx.currentTime + 0.12);
         }
@@ -200,7 +196,7 @@
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(450, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(220, audioCtx.currentTime + 0.18);
-            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
             gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
             osc.start(); osc.stop(audioCtx.currentTime + 0.18);
         }
@@ -221,7 +217,7 @@
             filter.frequency.value = 550;
             
             grindGainNode = audioCtx.createGain();
-            grindGainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            grindGainNode.gain.setValueAtTime(0.18, audioCtx.currentTime);
             
             grindNoiseNode.connect(filter);
             filter.connect(grindGainNode);
@@ -231,17 +227,14 @@
 
         function stopGrindSound() {
             if (grindNoiseNode) {
-                grindNoiseNode.stop();
-                grindNoiseNode.disconnect();
-                grindGainNode.disconnect();
-                grindNoiseNode = null;
-                grindGainNode = null;
+                grindNoiseNode.stop(); grindNoiseNode.disconnect();
+                grindGainNode.disconnect(); grindNoiseNode = null; grindGainNode = null;
             }
         }
 
         // --- Lights & Sun ---
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-        const sunLight = new THREE.DirectionalLight(0xfffaed, 0.9);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 0.85);
         sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
@@ -252,14 +245,14 @@
         sunVisual.position.set(120, 180, 80);
         scene.add(sunVisual);
 
-        // --- Safe Procedural Textures ---
-        function generateConcreteTexture() {
+        // --- Dark Gray Concrete & Wood Textures ---
+        function generateDarkConcrete() {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#b5b5b5'; ctx.fillRect(0,0,128,128);
-            ctx.fillStyle = '#9e9e9e';
-            for(let i=0; i<400; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
+            ctx.fillStyle = '#3c3c3c'; ctx.fillRect(0,0,128,128); // Gritty dark gray floor
+            ctx.fillStyle = '#2b2b2b';
+            for(let i=0; i<500; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
             tex.repeat.set(60, 60);
@@ -268,80 +261,88 @@
 
         function generateWoodTexture() {
             const canvas = document.createElement('canvas');
-            canvas.width = 128; canvas.height = 128;
+            canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#5a3d28'; ctx.fillRect(0,0,128,128); // Darker Wood Tone
-            ctx.fillStyle = '#412b1c';
-            for(let i=0; i<128; i+=16) ctx.fillRect(i, 0, 4, 128);
-            const tex = new THREE.CanvasTexture(canvas);
-            return tex;
+            ctx.fillStyle = '#513829'; ctx.fillRect(0,0,64,64); // Rich brown fence panels
+            ctx.fillStyle = '#3d2a1e';
+            for(let i=0; i<64; i+=16) ctx.fillRect(i, 0, 2, 64);
+            return new THREE.CanvasTexture(canvas);
         }
 
         function generateRampTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#d2a679'; ctx.fillRect(0,0,64,64);
-            ctx.fillStyle = '#be9366';
+            ctx.fillStyle = '#cd9a62'; ctx.fillRect(0,0,64,64);
+            ctx.fillStyle = '#b38450';
             for(let i=0; i<64; i+=8) ctx.fillRect(0, i, 64, 1);
             return new THREE.CanvasTexture(canvas);
         }
 
-        const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateConcreteTexture() });
+        const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateDarkConcrete() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
         const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture() });
-        const railMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 });
+        const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
 
-        // Ground Mesh
+        // Ground
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // --- Wooden Fence Perimeter Setup ---
+        // --- Perimeter Wooden Fence ---
         const fenceGroup = new THREE.Group();
         function createWoodFence(w, h, x, z, rotY) {
             const wall = new THREE.Group();
-            const fencePostGeo = new THREE.BoxGeometry(0.4, h, 0.4);
-            const plankGeo = new THREE.BoxGeometry(w, 0.6, 0.15);
-            
-            // Render individual wooden panel slabs dynamically
-            for(let i = -w/2; i <= w/2; i += 1.8) {
-                const plank = new THREE.Mesh(new THREE.BoxGeometry(1.6, h - 0.5, 0.1), woodMaterial);
+            for(let i = -w/2; i <= w/2; i += 1.6) {
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(1.4, h, 0.12), woodMaterial);
                 plank.position.set(i, h/2, 0);
                 wall.add(plank);
             }
-            // Cross bars
-            const cross1 = new THREE.Mesh(plankGeo, woodMaterial); cross1.position.set(0, h * 0.25, 0.1); wall.add(cross1);
+            const railGeo = new THREE.BoxGeometry(w, 0.4, 0.15);
+            const cross1 = new THREE.Mesh(railGeo, woodMaterial); cross1.position.set(0, h * 0.25, 0.08); wall.add(cross1);
             const cross2 = cross1.clone(); cross2.position.y = h * 0.75; wall.add(cross2);
             
             wall.position.set(x, 0, z); wall.rotation.y = rotY;
             fenceGroup.add(wall);
         }
-        createWoodFence(240, 6, 0, 120, 0); createWoodFence(240, 6, 0, -120, 0);
-        createWoodFence(240, 6, 120, 0, Math.PI/2); createWoodFence(240, 6, -120, 0, Math.PI/2);
+        createWoodFence(240, 5.5, 0, 120, 0); createWoodFence(240, 5.5, 0, -120, 0);
+        createWoodFence(240, 5.5, 120, 0, Math.PI/2); createWoodFence(240, 5.5, -120, 0, Math.PI/2);
         scene.add(fenceGroup);
 
-        // --- Big Nick's Sign Billboard ---
-        const signGroup = new THREE.Group();
-        signGroup.position.set(0, 20, -105);
-        const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(54, 11, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-        signGroup.add(boardMesh);
+        // --- Background Houses ---
+        function addBackgroundHouses() {
+            const houseColors = [0xaa4433, 0x4466aa, 0x558855, 0xddaa44, 0x887766];
+            for (let i = 0; i < 18; i++) {
+                const house = new THREE.Group();
+                const w = 12 + Math.random() * 8;
+                const h = 8 + Math.random() * 6;
+                const d = 12 + Math.random() * 6;
+                
+                // Base structure
+                const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: houseColors[Math.floor(Math.random() * houseColors.length)] }));
+                base.position.y = h/2;
+                house.add(base);
+                
+                // Roof
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.75, 4, 4), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+                roof.position.y = h + 2;
+                roof.rotation.y = Math.PI/4;
+                house.add(roof);
 
-        const signCanvas = document.createElement('canvas');
-        signCanvas.width = 512; signCanvas.height = 128;
-        const sCtx = signCanvas.getContext('2d');
-        sCtx.fillStyle = '#ffffff'; sCtx.fillRect(0,0,512,128);
-        sCtx.font = 'bold 42px Arial'; sCtx.fillStyle = '#0044cc'; sCtx.textAlign = 'center';
-        sCtx.fillText("BIG NICK'S SKATEPARK", 256, 75);
-        const signTex = new THREE.CanvasTexture(signCanvas);
-        const signPlate = new THREE.Mesh(new THREE.PlaneGeometry(52, 9), new THREE.MeshBasicMaterial({ map: signTex }));
-        signPlate.position.z = 0.6; signGroup.add(signPlate);
-        
-        const signPost1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 24), new THREE.MeshLambertMaterial({ color: 0x333333 }));
-        signPost1.position.set(-20, -12, 0); signGroup.add(signPost1);
-        const signPost2 = signPost1.clone(); signPost2.position.x = 20; signGroup.add(signPost2);
-        scene.add(signGroup);
+                // Position randomly outside the boundary fence lines
+                let side = Math.floor(Math.random() * 4);
+                let dist = 135 + Math.random() * 25;
+                let spread = (Math.random() - 0.5) * 200;
+                if (side === 0) house.position.set(spread, 0, dist);
+                else if (side === 1) house.position.set(spread, 0, -dist);
+                else if (side === 2) house.position.set(dist, 0, spread);
+                else house.position.set(-dist, 0, spread);
+                
+                scene.add(house);
+            }
+        }
+        addBackgroundHouses();
 
         // --- Obstacles Global Arrays ---
         const obstacles = [];
@@ -350,7 +351,8 @@
         function addSteepMegaRamp(w, h, d, x, z, rotY) {
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
-            // Steeper triangular slope math calculations
+            
+            // Adjusted vertex structure for smooth transition physics
             const vertices = new Float32Array([
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
                  w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
@@ -369,97 +371,128 @@
             group.position.set(x, 0, z); group.rotation.y = rotY;
             scene.add(group);
             
-            // Register boundaries for strict collision mapping
             obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY });
         }
 
-        function addRail(startX, startZ, endX, endZ, h=1.2) {
+        function addHorizontalRail(startX, startZ, endX, endZ, h=1.1) {
             const start = new THREE.Vector3(startX, h, startZ);
             const end = new THREE.Vector3(endX, h, endZ);
             const distance = start.distanceTo(end);
-            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, distance), railMaterial);
+            
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, distance), railMaterial);
             pipe.position.copy(start).add(end).multiplyScalar(0.5);
             pipe.lookAt(end); pipe.rotation.x += Math.PI / 2;
             scene.add(pipe);
 
-            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, h), railMaterial); p1.position.set(startX, h/2, startZ); scene.add(p1);
+            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, h), railMaterial); p1.position.set(startX, h/2, startZ); scene.add(p1);
             const p2 = p1.clone(); p2.position.set(endX, h/2, endZ); scene.add(p2);
             rails.push({ start: start, end: end, height: h });
         }
 
-        // --- Layout Map Populating (All separated to prevent passing through) ---
-        addSteepMegaRamp(24, 7.5, 18, 0, -50, 0);          // South Steep Mega
-        addSteepMegaRamp(20, 6.0, 15, -70, -20, Math.PI/2.5); // West Steep Mega
-        addSteepMegaRamp(20, 6.0, 15, 70, -20, -Math.PI/2.5); // East Steep Mega
-        addSteepMegaRamp(22, 6.5, 16, 0, 50, Math.PI);       // North Steep Mega
+        // --- Park Layout (Steep Mega Ramps & Strictly Horizontal Rails Only) ---
+        addSteepMegaRamp(24, 8.0, 16, 0, -55, 0);            // North Steep Launch
+        addSteepMegaRamp(22, 7.0, 14, -65, -25, Math.PI/2.5);  // West Steep Launch
+        addSteepMegaRamp(22, 7.0, 14, 65, -25, -Math.PI/2.5); // East Steep Launch
+        addSteepMegaRamp(24, 8.0, 16, 0, 55, Math.PI);        // South Steep Launch
 
-        addRail(-35, 15, -5, 15, 1.2);
-        addRail(5, 15, 35, 15, 1.2);
-        addRail(-35, -15, -5, -15, 1.2);
-        addRail(5, -15, 35, -15, 1.2);
+        addHorizontalRail(-35, 20, -10, 20, 1.1);
+        addHorizontalRail(10, 20, 35, 20, 1.1);
+        addHorizontalRail(-35, -20, -10, -20, 1.1);
+        addHorizontalRail(10, -20, 35, -20, 1.1);
 
-        // --- Skater & Completely Rounded Skateboard Assembly ---
+        // --- Skater & Compact Rounded Skateboard Setup ---
         const skaterRoot = new THREE.Group();
         const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
 
-        // Core Rounded Edges Deck Construction
-        const deckCenter = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 2.4), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        deckCenter.position.y = 0.52; boardGroup.add(deckCenter);
+        // Rebuilt Compact Oval Deck (Smaller proportions, rounded capsule caps)
+        const deckCenter = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.10, 1.6), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+        deckCenter.position.y = 0.44; boardGroup.add(deckCenter);
 
-        // Rounded Nose/Tail Cylinders to guarantee a smooth oval curved profile shape
-        const roundEdgeGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.12, 16, 1, false, 0, Math.PI);
-        const noseCap = new THREE.Mesh(roundEdgeGeo, new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        noseCap.position.set(0, 0.52, 1.2); noseCap.rotation.x = Math.PI/2; noseCap.rotation.z = Math.PI;
+        const roundEdgeGeo = new THREE.CylinderGeometry(0.425, 0.425, 0.10, 14, 1, false, 0, Math.PI);
+        const noseCap = new THREE.Mesh(roundEdgeGeo, new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+        noseCap.position.set(0, 0.44, 0.8); noseCap.rotation.x = Math.PI/2; noseCap.rotation.z = Math.PI;
         boardGroup.add(noseCap);
 
-        const tailCap = noseCap.clone(); tailCap.position.z = -1.2; tailCap.rotation.z = 0;
+        const tailCap = noseCap.clone(); tailCap.position.z = -0.8; tailCap.rotation.z = 0;
         boardGroup.add(tailCap);
         
-        // Wheel sets repositioned down to avoid clipping visuals through top of deck face
-        const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.18, 16);
-        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
-        const wOffset = [[-0.45, 0.9], [0.45, 0.9], [-0.45, -0.9], [0.45, -0.9]];
+        // Compact low-profile wheels hidden safely under deck rim
+        const wheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 12);
+        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+        const wOffset = [[-0.32, 0.6], [0.32, 0.6], [-0.32, -0.6], [0.32, -0.6]];
         wOffset.forEach(pos => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-            wheel.position.set(pos[0], 0.24, pos[1]); wheel.rotation.z = Math.PI/2;
+            wheel.position.set(pos[0], 0.18, pos[1]); wheel.rotation.z = Math.PI/2;
             boardGroup.add(wheel);
         });
 
-        // Sideways stance node tree skeleton map housing
-        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.52; skaterRoot.add(skaterSkeleton);
+        // Skater Rigging (Sideways stance)
+        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.44; skaterRoot.add(skaterSkeleton);
         const stanceGroup = new THREE.Group(); stanceGroup.rotation.y = Math.PI / 2; skaterSkeleton.add(stanceGroup);
 
-        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.25), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
-        leftLeg.position.set(-0.4, 0.4, 0); stanceGroup.add(leftLeg);
-        const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.4; stanceGroup.add(rightLeg);
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
+        leftLeg.position.set(-0.35, 0.38, 0); stanceGroup.add(leftLeg);
+        const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.35; stanceGroup.add(rightLeg);
 
-        const torsoGroup = new THREE.Group(); torsoGroup.position.y = 0.8; stanceGroup.add(torsoGroup);
-        const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.4), new THREE.MeshLambertMaterial({ color: 0xdd3333 })); shirt.position.y = 0.55; torsoGroup.add(shirt);
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); head.position.y = 1.3; torsoGroup.add(head);
+        const torsoGroup = new THREE.Group(); torsoGroup.position.y = 0.75; stanceGroup.add(torsoGroup);
+        const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.36), new THREE.MeshLambertMaterial({ color: 0xdd3333 })); shirt.position.y = 0.5; torsoGroup.add(shirt);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); head.position.y = 1.18; torsoGroup.add(head);
 
-        // BALD HEAD + PURE BLACK BASEBALL CAP ASSET
-        const capGroup = new THREE.Group(); capGroup.position.set(0, 1.5, 0);
-        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); capGroup.add(capDome);
-        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.26), new THREE.MeshLambertMaterial({ color: 0x111111 })); capBrim.position.set(0, -0.05, -0.25); capGroup.add(capBrim);
+        // BALD HEAD + SIGNIFICANTLY BIGGER BLACK CAP ASSET
+        const capGroup = new THREE.Group(); capGroup.position.set(0, 1.34, 0.05);
+        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); capGroup.add(capDome);
+        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), new THREE.MeshLambertMaterial({ color: 0x111111 })); capBrim.position.set(0, -0.05, -0.32); capGroup.add(capBrim);
         torsoGroup.add(capGroup);
 
-        const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.5, 0.9, 0); torsoGroup.add(leftArmRoot);
-        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); leftArm.position.y = -0.4; leftArmRoot.add(leftArm);
-        const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.5, 0.9, 0); torsoGroup.add(rightArmRoot);
-        const rightArm = leftArm.clone(); rightArm.position.y = -0.4; rightArmRoot.add(rightArm);
+        const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.45, 0.85, 0); torsoGroup.add(leftArmRoot);
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); leftArm.position.y = -0.35; leftArmRoot.add(leftArm);
+        const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.45, 0.85, 0); torsoGroup.add(rightArmRoot);
+        const rightArm = leftArm.clone(); rightArm.position.y = -0.35; rightArmRoot.add(rightArm);
 
-        skaterRoot.position.set(0, 0, 80);
+        skaterRoot.position.set(0, 0, 70);
         scene.add(skaterRoot);
 
-        // --- Unified Keyboard + Mobile Touch Control Handling Engine ---
+        // --- Living World Elements (Skaters, Walkers, Dogs NPCs) ---
+        const npcs = [];
+        const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933, 0x9966ff];
+
+        function spawnNPCs() {
+            // Other Skaters
+            for (let i = 0; i < 4; i++) {
+                const group = new THREE.Group();
+                const b = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 1.8), new THREE.MeshLambertMaterial({ color: 0x333333 })); b.position.y = 0.1; group.add(b);
+                const t = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.4), new THREE.MeshLambertMaterial({ color: npcColors[i] })); t.position.y = 0.8; group.add(t);
+                group.position.set((Math.random() - 0.5) * 140, 0, (Math.random() - 0.5) * 140);
+                scene.add(group);
+                npcs.push({ mesh: group, type: 'skater', speed: 0.15 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
+            }
+            // Pedestrians
+            for (let i = 0; i < 5; i++) {
+                const group = new THREE.Group();
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xeeeeee })); body.position.y = 0.7; group.add(body);
+                group.position.set((Math.random() - 0.5) * 160, 0, (Math.random() - 0.5) * 160);
+                scene.add(group);
+                npcs.push({ mesh: group, type: 'walker', speed: 0.04 + Math.random() * 0.03, angle: Math.random() * Math.PI * 2 });
+            }
+            // Running Dogs
+            for (let i = 0; i < 3; i++) {
+                const group = new THREE.Group();
+                const dBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.9), new THREE.MeshLambertMaterial({ color: 0xa67c52 })); dBody.position.y = 0.3; group.add(dBody);
+                const dHead = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshLambertMaterial({ color: 0xa67c52 })); dHead.position.set(0, 0.5, 0.4); group.add(dHead);
+                group.position.set((Math.random() - 0.5) * 120, 0, (Math.random() - 0.5) * 120);
+                scene.add(group);
+                npcs.push({ mesh: group, type: 'dog', speed: 0.2 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
+            }
+        }
+        spawnNPCs();
+
+        // --- Input Engine Matrix ---
         let speed = 0, heading = 0, yVelocity = 0;
         let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
-        let flipActive = false, flipProgress = 0;
-        let touchSteerDirection = 0; // -1 Left, 1 Right, 0 Center
+        let flipActive = false, flipProgress = 0, touchSteerDirection = 0;
 
         const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
 
-        // Keyboard Actions
         window.addEventListener('keydown', e => {
             initAudio();
             if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
@@ -474,41 +507,33 @@
             if(e.key==='a' || e.key==='ArrowLeft') keys.a = false;
             if(e.key==='s' || e.key==='ArrowDown') keys.s = false;
             if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
-            if(e.key===' ') {
-                keys.space = false;
-                triggerOllieRelease();
-            }
+            if(e.key===' ') { keys.space = false; triggerOllieRelease(); }
             if(e.key==='Shift') keys.shift = false;
         });
 
-        // Mobile Screen Touch Action Mapping listeners
+        // Touch Hooks
         const joyZone = document.getElementById('joystick-zone');
         joyZone.addEventListener('touchstart', e => {
             initAudio();
-            const t = e.touches[0];
             const rect = joyZone.getBoundingClientRect();
-            const centerX = rect.left + rect.width/2;
-            touchSteerDirection = (t.clientX < centerX) ? -1 : 1;
+            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
         }, {passive: true});
         joyZone.addEventListener('touchmove', e => {
-            const t = e.touches[0];
             const rect = joyZone.getBoundingClientRect();
-            const centerX = rect.left + rect.width/2;
-            touchSteerDirection = (t.clientX < centerX) ? -1 : 1;
+            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
         }, {passive: true});
         joyZone.addEventListener('touchend', () => { touchSteerDirection = 0; });
 
         const oBtn = document.getElementById('btn-ollie');
-        oBtn.addEventListener('touchstart', e => { initAudio(); if(isGrounded) ollieHold = true; }, {passive: true});
-        oBtn.addEventListener('touchend', e => { triggerOllieRelease(); }, {passive: true});
+        oBtn.addEventListener('touchstart', () => { initAudio(); if(isGrounded) ollieHold = true; }, {passive: true});
+        oBtn.addEventListener('touchend', () => { triggerOllieRelease(); }, {passive: true});
 
-        const fBtn = document.getElementById('btn-kickflip');
-        fBtn.addEventListener('touchstart', e => { initAudio(); triggerKickflipAction(); }, {passive: true});
+        document.getElementById('btn-kickflip').addEventListener('touchstart', () => { initAudio(); triggerKickflipAction(); }, {passive: true});
 
         function triggerOllieRelease() {
             if(isGrounded && ollieHold) {
                 ollieHold = false;
-                yVelocity = 0.32 + (crouchAmt * 0.15);
+                yVelocity = 0.33 + (crouchAmt * 0.14);
                 isGrounded = false; isGrinding = false;
                 playJumpSound();
                 registerTrick("OLLIE", 50);
@@ -523,7 +548,6 @@
             }
         }
 
-        // --- System Combo Accounting Processing ---
         function registerTrick(name, pts) {
             if(!activeTricks.includes(name)) {
                 activeTricks.push(name);
@@ -545,21 +569,13 @@
         }
         function bailCombo() {
             currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
-            document.getElementById('trick-text').innerText = "WIPEOUT! BAIL +0";
+            document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
             setTimeout(() => { document.getElementById('trick-text').innerText=""; }, 1200);
             updateHUD();
         }
         function updateHUD() {
             document.getElementById('score-value').innerText = Math.floor(totalScore).toString().padStart(5,'0');
-            const bar = document.getElementById('special-bar-fill');
-            bar.style.width = specialMeter + '%';
-            if(isSpecialActive) {
-                bar.style.backgroundColor = '#ffcc00';
-                document.getElementById('special-text').innerText = `SPECIAL MODE! ${Math.ceil(specialTimer)}s`;
-            } else {
-                bar.style.backgroundColor = '#0f0';
-                document.getElementById('special-text').innerText = "SPECIAL";
-            }
+            document.getElementById('special-bar-fill').style.width = specialMeter + '%';
             if(currentComboPoints > 0) {
                 document.getElementById('trick-text').innerText = activeTricks.join(" + ") + ` ${currentComboPoints} x${currentComboMultiplier}`;
             } else if(!document.getElementById('trick-text').innerText.includes("WIPEOUT")) {
@@ -567,74 +583,67 @@
             }
         }
 
-        // --- Main Animation Frame Run Cycle ---
+        // --- Game Loops Engine ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Clock tracking
+            // Time Tracking
             timerSeconds -= (1/60);
             if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            if(isSpecialActive) {
-                specialTimer -= (1/60); specialMeter = (specialTimer / 10.0) * 100; updateHUD();
-                if(specialTimer <= 0) { isSpecialActive = false; specialMeter = 0; updateHUD(); }
-            }
-
-            // Steer rotation handling via Dual Inputs
-            if (keys.a || touchSteerDirection === -1) heading += 0.045;
-            if (keys.d || touchSteerDirection === 1) heading -= 0.045;
+            if (keys.a || touchSteerDirection === -1) heading += 0.046;
+            if (keys.d || touchSteerDirection === 1) heading -= 0.046;
             skaterRoot.rotation.y = heading;
 
-            let maxSpd = isSpecialActive ? 0.90 : 0.44;
+            let maxSpd = isSpecialActive ? 0.95 : 0.46;
             let acc = isSpecialActive ? 0.08 : 0.05;
+            let driving = keys.w || isMobile;
 
-            // Mobile auto-drives forward, keypress controls on desktop setup
-            let wantingToDrive = keys.w || isMobile;
-
-            if (wantingToDrive && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
+            if (driving && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
             else if (keys.s && isGrounded) speed += (-0.22 - speed) * 0.08;
-            else if (isGrounded) speed *= 0.96;
+            else if (isGrounded) speed *= 0.95;
 
-            // Preserve temporary coordinates vector for boundary safety check tests
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
             let nextZ = skaterRoot.position.z + speed * Math.cos(heading);
 
-            // --- strict Solid-Wall Object Collision Calculations ---
+            // --- Fixed Up-Ramp Height Physics + Solid Wall Collisions ---
             let groundHeight = 0;
-            let collisionBlocked = false;
+            let hitBarrier = false;
 
             obstacles.forEach(obs => {
                 let dx = nextX - obs.x;
                 let dz = nextZ - obs.z;
-
                 let cos = Math.cos(-obs.rotY); let sin = Math.sin(-obs.rotY);
                 let rx = dx * cos - dz * sin;
                 let rz = dx * sin + dz * cos;
 
-                // Check bounding container margins
-                if (Math.abs(rx) < (obs.w/2 + 0.6) && Math.abs(rz) < (obs.d/2 + 0.6)) {
-                    // If skater is lower than the top profile peak, treat it as a hard block wall!
-                    if (skaterRoot.position.y < obs.h - 0.2) {
-                        collisionBlocked = true;
-                    } else {
-                        // Skater is above the ramp plane, engage slide elevation height resolver
-                        let ratio = (obs.d/2 - rz) / obs.d;
-                        if(ratio >= 0 && ratio <= 1) {
-                            groundHeight = ratio * obs.h;
+                // Precision check boundaries
+                if (Math.abs(rx) < (obs.w/2) && Math.abs(rz) < (obs.d/2)) {
+                    // Check if arriving from flat front opening vs running straight through wall side guards
+                    let approachRatio = (obs.d/2 - rz) / obs.d; 
+                    if(approachRatio >= 0.0 && approachRatio <= 1.0) {
+                        let calculateSlopeHeight = approachRatio * obs.h;
+                        // Smoothly scale climb threshold, otherwise block movement execution
+                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.4) {
+                            groundHeight = calculateSlopeHeight;
+                        } else {
+                            hitBarrier = true;
                         }
+                    } else {
+                        hitBarrier = true;
                     }
                 }
             });
 
-            if (!isGrinding && !collisionBlocked) {
+            if (!isGrinding && !hitBarrier) {
                 skaterRoot.position.x = nextX;
                 skaterRoot.position.z = nextZ;
-            } else if (collisionBlocked) {
-                speed *= -0.4; // Bounce gently backwards off solid wall blocks
+            } else if (hitBarrier) {
+                speed *= -0.35; // Deflect
             }
 
-            // Map Bounds Clamping containment
+            // Boundary checks
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
@@ -646,20 +655,16 @@
                 if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
             }
 
-            // Crouch tracking mechanics processing
             if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
             else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
 
-            // --- Rail Grinding Verification loops ---
+            // --- Rail Processing ---
             if (!isGrounded && yVelocity <= 0 && !isGrinding) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
                     let cross = Math.abs((rail.end.z - rail.start.z)*pos.x - (rail.end.x - rail.start.x)*pos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
-                    
-                    if (cross < 1.3 && pos.y >= rail.height - 0.6 && pos.y <= rail.height + 1.0) {
-                        let minZ = Math.min(rail.start.z, rail.end.z) - 1.5;
-                        let maxZ = Math.max(rail.start.z, rail.end.z) + 1.5;
-                        if(pos.z >= minZ && pos.z <= maxZ) {
+                    if (cross < 1.1 && pos.y >= rail.height - 0.5 && pos.y <= rail.height + 0.8) {
+                        if(pos.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && pos.z <= Math.max(rail.start.z, rail.end.z) + 1.0) {
                             isGrinding = true; isGrounded = true;
                             skaterRoot.position.y = rail.height; yVelocity = 0;
                             heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
@@ -670,67 +675,58 @@
             }
 
             if (isGrinding) {
-                registerTrick("50-50 GRIND", 400); currentComboPoints += isSpecialActive ? 6 : 3; updateHUD();
-                let gSpd = isSpecialActive ? 0.60 : 0.32;
-                skaterRoot.position.x += gSpd * Math.sin(heading);
-                skaterRoot.position.z += gSpd * Math.cos(heading);
-
-                let verifiedOnRail = false;
+                registerTrick("50-50 GRIND", 400); currentComboPoints += 4; updateHUD();
+                skaterRoot.position.x += 0.30 * Math.sin(heading);
+                skaterRoot.position.z += 0.30 * Math.cos(heading);
+                
+                let stillOn = false;
                 rails.forEach(rail => {
-                    let minZ = Math.min(rail.start.z, rail.end.z) - 1.5;
-                    let maxZ = Math.max(rail.start.z, rail.end.z) + 1.5;
-                    if(skaterRoot.position.z >= minZ && skaterRoot.position.z <= maxZ && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) verifiedOnRail = true;
+                    if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.0) stillOn = true;
                 });
-
-                if(!verifiedOnRail || keys.space) {
-                    isGrinding = false; isGrounded = false;
-                    stopGrindSound();
-                    if(keys.space) yVelocity = 0.24;
+                if(!stillOn || keys.space) {
+                    isGrinding = false; isGrounded = false; stopGrindSound();
+                    if(keys.space) yVelocity = 0.22;
                 }
             }
 
-            // --- Gravity Resolver ---
+            // --- Gravity Logic ---
             if (!isGrounded) {
-                yVelocity -= isSpecialActive ? 0.010 : 0.013;
+                yVelocity -= 0.012;
                 skaterRoot.position.y += yVelocity;
-
                 if (skaterRoot.position.y <= groundHeight) {
-                    skaterRoot.position.y = groundHeight;
-                    yVelocity = 0; isGrounded = true;
-                    if(flipActive) { generalsBail = true; bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
-                    else { landCombo(); }
+                    skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
+                    if(flipActive) { bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
+                    else landCombo();
                 }
             } else if (!isGrinding) {
                 skaterRoot.position.y = groundHeight;
             }
 
-            // Skater skeleton rigging frame node tracking
-            leftLeg.position.y = 0.4 - (crouchAmt * 0.7);
-            rightLeg.position.y = 0.4 - (crouchAmt * 0.7);
-            torsoGroup.position.y = 0.8 - (crouchAmt * 1.1);
+            // NPC Cycle Loop Movements
+            npcs.forEach(npc => {
+                npc.mesh.position.x += npc.speed * Math.sin(npc.angle);
+                npc.mesh.position.z += npc.speed * Math.cos(npc.angle);
+                if(Math.abs(npc.mesh.position.x) > 115 || Math.abs(npc.mesh.position.z) > 115) {
+                    npc.angle += Math.PI; // Bounce turn back internally inside courtyard map parameters
+                }
+            });
 
-            if (isGrinding) {
-                leftArmRoot.rotation.z = -Math.PI / 2.3; rightArmRoot.rotation.z = Math.PI / 2.3;
-            } else if (ollieHold || flipActive) {
-                leftArmRoot.rotation.z = -0.2; rightArmRoot.rotation.z = 0.2;
-            } else if (!isGrounded) {
-                leftArmRoot.rotation.z = -Math.PI + 0.6; rightArmRoot.rotation.z = Math.PI - 0.6;
-            } else {
-                leftArmRoot.rotation.z = -0.15; rightArmRoot.rotation.z = 0.15;
-            }
+            // Posture Nodes Animations
+            leftLeg.position.y = 0.38 - (crouchAmt * 0.7);
+            rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
+            torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
 
-            // Camera Tracking Follow Target Lerp math
-            const relativeOffset = new THREE.Vector3(0, 5.5, -11.5);
+            // Camera Track calculations
+            const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
-            camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.2, skaterRoot.position.z));
+            camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.0, skaterRoot.position.z));
 
             renderer.render(scene, camera);
         }
 
         window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
