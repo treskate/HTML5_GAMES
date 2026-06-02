@@ -105,7 +105,7 @@
             height: 110px;
         }
         #btn-ollie {
-            bottom: 50px;
+            bottom: 40px;
             right: 40px;
             width: 85px;
             height: 85px;
@@ -113,12 +113,20 @@
             background: rgba(0, 200, 0, 0.3);
         }
         #btn-kickflip {
-            bottom: 145px;
-            right: 55px;
+            bottom: 135px;
+            right: 30px;
             width: 65px;
             height: 65px;
-            font-size: 12px;
+            font-size: 11px;
             background: rgba(0, 100, 255, 0.3);
+        }
+        #btn-backflip {
+            bottom: 135px;
+            right: 110px;
+            width: 65px;
+            height: 65px;
+            font-size: 10px;
+            background: rgba(180, 0, 255, 0.35);
         }
     </style>
 </head>
@@ -141,7 +149,8 @@
 
     <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
     <div id="btn-ollie" class="mobile-btn">OLLIE</div>
-    <div id="btn-kickflip" class="mobile-btn">FLIP</div>
+    <div id="btn-kickflip" class="mobile-btn">KICKFLIP</div>
+    <div id="btn-backflip" class="mobile-btn">BACKFLIP</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
 
@@ -154,8 +163,6 @@
         // --- Game Setup Variables ---
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
         let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
-        
-        // Dynamic FX Trackers (Declared up top to avoid crashes)
         let landingShake = 0;
         const particles = [];
 
@@ -327,7 +334,7 @@
                 house.add(roof);
 
                 let side = Math.floor(Math.random() * 4);
-                let dist = 135 + Math.random() * 20;
+                let dist = 145 + Math.random() * 20;
                 let spread = (Math.random() - 0.5) * 220;
                 if (side === 0) house.position.set(spread, 0, dist);
                 else if (side === 1) house.position.set(spread, 0, -dist);
@@ -394,7 +401,7 @@
         addHorizontalRail(-80, -40, -80, 40, 1.3);
         addHorizontalRail(80, -40, 80, 40, 1.3);
 
-        // --- Hero Skater & Reverted Standard Flat Edge Skateboard ---
+        // --- Hero Skater Rig ---
         const skaterRoot = new THREE.Group();
         const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
 
@@ -441,7 +448,7 @@
         skaterRoot.position.set(0, 0, 40);
         scene.add(skaterRoot);
 
-        // --- Humanized Skater NPCs ---
+        // --- NPCs ---
         const npcs = [];
         const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933];
 
@@ -471,13 +478,49 @@
 
                 npcSkater.position.set((Math.random() - 0.5) * 130, 0, (Math.random() - 0.5) * 130);
                 scene.add(npcSkater);
-                
                 npcs.push({ mesh: npcSkater, speed: 0.14 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
             }
         }
         spawnSkaterNPCs();
 
-        // --- FX Systems Functions ---
+        // --- Benches Asset Lineup ---
+        function addParkBenches() {
+            const benchMat = new THREE.MeshLambertMaterial({color: 0x8b5a2b});
+            for(let i=0; i<12; i++){
+                const bench = new THREE.Mesh(new THREE.BoxGeometry(3,0.3,1), benchMat);
+                bench.position.set((Math.random()-0.5)*180, 0.15, (Math.random()-0.5)*180);
+                scene.add(bench);
+            }
+        }
+        addParkBenches();
+
+        // --- Fixed: Giant Perimeter Boundary Trees (None in Center) ---
+        function addMassiveFenceTrees() {
+            const trunkGeo = new THREE.CylinderGeometry(0.9, 1.3, 16, 12);
+            const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2f1b });
+            const leafGeo = new THREE.ConeGeometry(5.5, 14, 10);
+            const leafMat = new THREE.MeshLambertMaterial({ color: 0x134f13 });
+
+            // Spawn loop tightly framing inner perimeter fence line boundaries
+            for (let i = 0; i < 35; i++) {
+                const tree = new THREE.Group();
+                const tMesh = new THREE.Mesh(trunkGeo, trunkMat); tMesh.position.y = 8; tree.add(tMesh);
+                const lMesh = new THREE.Mesh(leafGeo, leafMat); lMesh.position.y = 17; tree.add(lMesh);
+                
+                // Position vectors along boundaries
+                let side = i % 4;
+                let posOffset = (Math.random() - 0.5) * 220;
+                if (side === 0) tree.position.set(posOffset, 0, 114);
+                else if (side === 1) tree.position.set(posOffset, 0, -114);
+                else if (side === 2) tree.position.set(114, 0, posOffset);
+                else tree.position.set(-114, 0, posOffset);
+
+                scene.add(tree);
+            }
+        }
+        addMassiveFenceTrees();
+
+        // --- FX Systems ---
         function spawnLandingParticles(x, y, z) {
             for(let i=0; i<20; i++) {
                 const p = new THREE.Mesh(
@@ -496,37 +539,13 @@
             }
         }
 
-        function addParkProps() {
-            const benchMat = new THREE.MeshLambertMaterial({ color: 0x8b5a2b });
-            for(let i=0; i<12; i++) {
-                const bench = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 1), benchMat);
-                bench.position.set((Math.random() - 0.5) * 180, 0.15, (Math.random() - 0.5) * 180);
-                scene.add(bench);
-            }
-
-            for(let i=0; i<25; i++) {
-                const trunk = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.3, 0.4, 3),
-                    new THREE.MeshLambertMaterial({ color: 0x6b4423 })
-                );
-                const leaves = new THREE.Mesh(
-                    new THREE.SphereGeometry(1.8, 10, 10),
-                    new THREE.MeshLambertMaterial({ color: 0x2f8f2f })
-                );
-                trunk.position.set((Math.random() - 0.5) * 240, 1.5, (Math.random() - 0.5) * 240);
-                leaves.position.set(trunk.position.x, 4, trunk.position.z);
-                scene.add(trunk);
-                scene.add(leaves);
-            }
-        }
-        addParkProps();
-
-        // --- Controls Handling ---
+        // --- Simulation Variable Mechanics ---
         let speed = 0, heading = 0, yVelocity = 0;
         let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
         let flipActive = false, flipProgress = 0, touchSteerDirection = 0;
+        let backflipActive = false, backflipProgress = 0;
 
-        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
+        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, b:false };
 
         window.addEventListener('keydown', e => {
             initAudio();
@@ -536,6 +555,7 @@
             if(e.key==='d' || e.key==='ArrowRight') keys.d = true;
             if(e.key===' ') { keys.space = true; if(isGrounded) ollieHold = true; }
             if(e.key==='Shift') keys.shift = true;
+            if(e.key==='b' || e.key==='B') { keys.b = true; triggerBackflipAction(); }
         });
         window.addEventListener('keyup', e => {
             if(e.key==='w' || e.key==='ArrowUp') keys.w = false;
@@ -544,8 +564,10 @@
             if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
             if(e.key===' ') { keys.space = false; triggerOllieRelease(); }
             if(e.key==='Shift') keys.shift = false;
+            if(e.key==='b' || e.key==='B') keys.b = false;
         });
 
+        // Mobile Controllers Overlay Listeners
         const joyZone = document.getElementById('joystick-zone');
         joyZone.addEventListener('touchstart', e => {
             initAudio();
@@ -563,11 +585,12 @@
         oBtn.addEventListener('touchend', () => { triggerOllieRelease(); }, {passive: true});
 
         document.getElementById('btn-kickflip').addEventListener('touchstart', () => { initAudio(); triggerKickflipAction(); }, {passive: true});
+        document.getElementById('btn-backflip').addEventListener('touchstart', () => { initAudio(); triggerBackflipAction(); }, {passive: true});
 
         function triggerOllieRelease() {
             if(isGrounded && ollieHold) {
                 ollieHold = false;
-                yVelocity = 0.33 + (crouchAmt * 0.14);
+                yVelocity = 0.35 + (crouchAmt * 0.15);
                 isGrounded = false; isGrinding = false;
                 playJumpSound();
                 registerTrick("OLLIE", 50);
@@ -579,6 +602,14 @@
                 flipActive = true; flipProgress = 0;
                 playFlipSound();
                 registerTrick("KICKFLIP", 300);
+            }
+        }
+
+        function triggerBackflipAction() {
+            if (!isGrounded && !backflipActive) {
+                backflipActive = true; backflipProgress = 0;
+                playFlipSound();
+                registerTrick("BACKFLIP", 500);
             }
         }
 
@@ -617,7 +648,7 @@
             }
         }
 
-        // --- Main Simulation Loop ---
+        // --- Main Simulation Engine Loops ---
         function animate() {
             requestAnimationFrame(animate);
 
@@ -634,8 +665,9 @@
             let acc = isSpecialActive ? 0.08 : 0.05;
             let driving = keys.w || isMobile;
 
-            if (driving && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
-            else if (keys.s && isGrounded) speed += (-0.22 - speed) * 0.08;
+            // Fixed Ramp Speed: maintain momentum logic during uphill drive conditions
+            if (driving && !ollieHold) speed += (maxSpd - speed) * acc;
+            else if (keys.s) speed += (-0.22 - speed) * 0.08;
             else if (isGrounded) speed *= 0.95;
 
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
@@ -655,7 +687,8 @@
                     let approachRatio = (obs.d/2 - rz) / obs.d; 
                     if(approachRatio >= 0.0 && approachRatio <= 1.0) {
                         let calculateSlopeHeight = approachRatio * obs.h;
-                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.5) {
+                        // Fixed deceleration trigger: increased check leeway so it rides cleanly up rather than colliding
+                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.8) {
                             groundHeight = calculateSlopeHeight;
                         } else {
                             hitBarrier = true;
@@ -673,21 +706,32 @@
                 speed *= -0.35;
             }
 
+            // Boundaries
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
             if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
 
             if (keys.shift) triggerKickflipAction();
+            
+            // Kickflip Rotation Transform
             if (flipActive) {
-                flipProgress += 0.35; boardGroup.rotation.z = flipProgress;
+                flipProgress += 0.35; 
+                boardGroup.rotation.z = flipProgress;
                 if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
+            }
+
+            // Backflip Rotation Transform (Rotates on X-axis)
+            if (backflipActive) {
+                backflipProgress += 0.22;
+                skaterSkeleton.rotation.x = -backflipProgress;
+                if (backflipProgress >= Math.PI * 2) { skaterSkeleton.rotation.x = 0; backflipActive = false; }
             }
 
             if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
             else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
 
-            // Rail Grinding
+            // Rail Grinding Checks
             if (!isGrounded && yVelocity <= 0 && !isGrinding) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
@@ -718,14 +762,16 @@
                 }
             }
 
-            // Gravity Logic
+            // Gravity Physics Engine
             if (!isGrounded) {
                 yVelocity -= 0.012;
                 skaterRoot.position.y += yVelocity;
                 if (skaterRoot.position.y <= groundHeight) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
-                    if(flipActive) { 
-                        bailCombo(); boardGroup.rotation.z = 0; flipActive = false; 
+                    if(flipActive || backflipActive) { 
+                        bailCombo(); 
+                        boardGroup.rotation.z = 0; skaterSkeleton.rotation.x = 0;
+                        flipActive = false; backflipActive = false;
                     } else {
                         landingShake = 0.4;
                         spawnLandingParticles(skaterRoot.position.x, skaterRoot.position.y, skaterRoot.position.z);
@@ -736,7 +782,7 @@
                 skaterRoot.position.y = groundHeight;
             }
 
-            // Other Skaters AI
+            // AI NPC Updates
             npcs.forEach(npc => {
                 npc.mesh.position.x += npc.speed * Math.sin(npc.angle);
                 npc.mesh.position.z += npc.speed * Math.cos(npc.angle);
@@ -746,18 +792,18 @@
                 }
             });
 
-            // Posture Nodes Animations
+            // Posture Transform Matrix
             leftLeg.position.y = 0.38 - (crouchAmt * 0.7);
             rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
             torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
 
-            // Camera Tracking
+            // Camera Tracking Follow Lerp
             const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
             camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.0, skaterRoot.position.z));
 
-            // Particle Updates
+            // Particles Array Life Simulation Loop
             for(let i=particles.length-1; i>=0; i--){
                 const p=particles[i];
                 p.position.x += p.userData.vx;
@@ -770,17 +816,15 @@
                 }
             }
 
-            // Screen Shake Dynamic Math
+            // Camera Screen Impact Shakes
             if(landingShake>0){
                 camera.position.x += (Math.random()-0.5)*landingShake;
                 camera.position.y += (Math.random()-0.5)*landingShake;
                 landingShake *= 0.85;
             }
 
-            // Dynamic Speed FOV
             camera.fov = 70 + Math.min(Math.abs(speed)*18,15);
             camera.updateProjectionMatrix();
-            
             renderer.render(scene, camera);
         }
 
@@ -789,7 +833,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Fire loop once everything is fully set up
+        // Fire game system loop
         animate();
     </script>
 </body>
