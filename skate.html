@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Canvas Skate & Draw - Camera Follow Edition</title>
+    <title>Canvas Skate & Draw - Sandbox Checkpoint Edition</title>
     <style>
         body {
             margin: 0;
@@ -36,6 +36,58 @@
             margin-top: 5px;
             font-family: 'Courier New', Courier, monospace;
         }
+        
+        /* Toolbar Setup */
+        #toolbar {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+        }
+        .tool-btn {
+            background: #282828;
+            border: 2px solid #555;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .tool-btn.active {
+            border-color: #00ffcc;
+            background: #15332a;
+            color: #00ffcc;
+        }
+        
+        /* Color Swatches Grid */
+        .color-picker {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            background: rgba(0,0,0,0.5);
+            padding: 6px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+        .swatch {
+            width: 25px;
+            height: 25px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            box-sizing: border-box;
+        }
+        .swatch.active {
+            border-color: #ffcc00;
+            transform: scale(1.1);
+        }
+        
         canvas {
             display: block;
             background: #222;
@@ -95,45 +147,38 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.5);
         }
         
-        /* Triangle (Top) */
         #btn-triangle { top: 0; left: 59px; color: #41ffb7; border-color: #1b855a; }
         #btn-triangle:active { background: rgba(65, 255, 183, 0.4); }
-        
-        /* Square (Left) */
         #btn-square { top: 59px; left: 0; color: #f4add5; border-color: #9c5880; font-size: 20px; }
         #btn-square:active { background: rgba(244, 173, 213, 0.4); }
-        
-        /* Circle - TURBO (Right) */
         #btn-circle { top: 59px; right: 0; color: #ff5500; border-color: #b32400; font-size: 14px; }
         #btn-circle:active { background: rgba(255, 85, 0, 0.4); }
-        
-        /* Cross (Bottom) */
         #btn-cross { bottom: 0; left: 59px; color: #8fa1f0; border-color: #3b4e9e; }
         #btn-cross:active { background: rgba(143, 161, 240, 0.4); }
-
-        #btn-clear {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            width: auto;
-            height: auto;
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-size: 12px;
-            background: rgba(255, 255, 255, 0.1);
-        }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1>Arcade Sketch & Skate</h1>
-        <p>▢ Kickflip (+5) | ✕ Ollie (+2) | Δ 360 (+10)</p>
-        <p>◯ TURBO FIRE BOOST (+20) | 2-Fingers/Right-click to Pan</p>
+        <h1>Arcade Infinite Skate</h1>
+        <p>▢ Kickflip (+5) | ✕ Ollie (+2) | Δ 360 (+10) | ◯ Turbo (+20)</p>
+        <p>Pan Workspace: Right-click + Drag / 2-Finger Touch</p>
         <div class="score-display" id="scoreBoard">SCORE: 00000</div>
     </div>
 
-    <button id="btn-clear" class="btn-dir interactive">Clear Track</button>
+    <div id="toolbar">
+        <button id="btn-draw" class="tool-btn active">Pen Tool</button>
+        <button id="btn-erase" class="tool-btn">Eraser</button>
+        <div class="color-picker">
+            <div class="swatch active" id="swatch-green" style="background: #00ffcc;" title="Green"></div>
+            <div class="swatch" id="swatch-blue" style="background: #00bbff;" title="Blue"></div>
+            <div class="swatch" id="swatch-white" style="background: #ffffff;" title="White"></div>
+            <div class="swatch" id="swatch-red" style="background: #f26666;" title="Red"></div>
+            <div class="swatch" id="swatch-yellow" style="background: #ffcc00;" title="Yellow"></div>
+            <div class="swatch" id="swatch-purple" style="background: #9b5de5;" title="Purple"></div>
+        </div>
+        <button id="btn-clear" class="tool-btn" style="border-color:#a63232;">Clear All</button>
+    </div>
 
     <div id="controls">
         <div class="dpad interactive">
@@ -162,7 +207,26 @@
         window.addEventListener('resize', resize);
         resize();
 
-        // --- Game Score Variables ---
+        // --- Core Engine Global State Parameters ---
+        let lines = [];
+        let isDrawing = false, isPanning = false;
+        
+        let cameraX = 0;
+        let cameraY = 0;
+        
+        let startPoint = { x: 0, y: 0 }, panStartPoint = { x: 0, y: 0 }, touchStartPos = { x: 0, y: 0 };
+        let hasMovedSignificantly = false;
+        let particles = [];
+        let forceFollowCamera = true;
+
+        // Interactive Toolbar Mode States
+        let currentMode = 'draw';
+        let selectedColor = '#00ffcc';
+
+        // Checkpoint Coordinates Memory for Respawning System
+        let checkpointX = 0;
+        let checkpointY = 0;
+
         let score = 0;
         function addScore(points) {
             score += points;
@@ -180,88 +244,54 @@
         function playOllieSound() {
             initAudio(); if (!audioCtx) return;
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(140, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(380, audioCtx.currentTime + 0.08);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         }
 
         function playKickflipSound() {
             initAudio(); if (!audioCtx) return;
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(550, audioCtx.currentTime);
+            osc.type = 'sine'; osc.frequency.setValueAtTime(550, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(950, audioCtx.currentTime + 0.15);
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.15);
         }
 
         function playTurboSound() {
             initAudio(); if (!audioCtx) return;
-            const bufferSize = audioCtx.sampleRate * 0.25;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
-            }
-            const noise = audioCtx.createBufferSource();
-            noise.buffer = buffer;
-
-            const filter = audioCtx.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(400, audioCtx.currentTime);
+            const bufferSize = audioCtx.sampleRate * 0.25, buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate), data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource(); noise.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, audioCtx.currentTime);
             filter.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.25);
-
-            const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-
-            noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
-            noise.start();
+            const gain = audioCtx.createGain(); gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+            noise.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination); noise.start();
         }
 
         function playSpinSound() {
             initAudio(); if (!audioCtx) return;
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(200, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.3);
-            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.3);
         }
 
         function playCrashSound() {
             initAudio(); if (!audioCtx) return;
             const osc = audioCtx.createOscillator(), gain = audioCtx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(90, audioCtx.currentTime);
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(90, audioCtx.currentTime);
             osc.frequency.linearRampToValueAtTime(20, audioCtx.currentTime + 0.4);
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-            osc.connect(gain); gain.connect(audioCtx.destination);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.4);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+            osc.connect(gain); gain.connect(audioCtx.destination); osc.start(); osc.stop(audioCtx.currentTime + 0.4);
         }
 
-        // --- Engine Global Parameters ---
-        let lines = [];
-        let isDrawing = false, isPanning = false;
-        let cameraX = 0;
-        let startPoint = { x: 0, y: 0 }, panStartPoint = { x: 0, y: 0 }, touchStartPos = { x: 0, y: 0 };
-        let hasMovedSignificantly = false;
-        let particles = [];
-        let forceFollowCamera = true; // Tracks if the camera should auto-lock onto the skater
-
+        // --- Skater Physical Object Mapping ---
         const skater = {
             x: 0, y: 0, vx: 0, vy: 0, radius: 12, angle: 0, angularVelocity: 0,
             isActive: false, isOnGround: false, gravity: 0.3, friction: 0.99, airResistance: 0.995,
-            
             isKickflipping: false, kickflipTimer: 0, kickflipDuration: 18, boardFlipAngle: 0,
             isSpinning360: false, spinTimer: 0, spinDuration: 24, spinBaseAngle: 0
         };
@@ -270,29 +300,39 @@
 
         function spawnSkater(screenX, screenY) {
             initAudio();
-            skater.x = screenX + cameraX; skater.y = screenY;
-            skater.vx = 0; skater.vy = 0; skater.angle = 0; skater.angularVelocity = 0;
-            skater.isKickflipping = false; skater.isSpinning360 = false;
-            skater.isActive = true;
-            forceFollowCamera = true; 
+            // Assign world position coordinates
+            checkpointX = screenX + cameraX;
+            checkpointY = screenY + cameraY;
+            
+            triggerRespawn();
             resetScore();
+        }
+
+        // Resets state logic and places skater back at the active checkpoint marker coordinates
+        function triggerRespawn() {
+            skater.x = checkpointX;
+            skater.y = checkpointY;
+            skater.vx = 0;
+            skater.vy = 0;
+            skater.angle = 0;
+            skater.angularVelocity = 0;
+            skater.isKickflipping = false;
+            skater.isSpinning360 = false;
+            skater.isActive = true;
+            forceFollowCamera = true;
         }
 
         function triggerKickflip() {
             if (skater.isActive && !skater.isOnGround && !skater.isKickflipping) {
                 skater.isKickflipping = true; skater.kickflipTimer = 0; skater.vy = -4.0;
-                forceFollowCamera = true;
-                playKickflipSound();
-                addScore(5);
+                forceFollowCamera = true; playKickflipSound(); addScore(5);
             }
         }
 
         function triggerOllie() {
             if (skater.isActive) {
                 skater.vy = -6.5; skater.isOnGround = false;
-                forceFollowCamera = true;
-                playOllieSound();
-                addScore(2);
+                forceFollowCamera = true; playOllieSound(); addScore(2);
                 skater.isKickflipping = false;
             }
         }
@@ -302,21 +342,15 @@
                 const thrust = 7.5;
                 skater.vx += Math.cos(skater.angle) * thrust;
                 skater.vy += Math.sin(skater.angle) * thrust - 1.5;
-                skater.isOnGround = false;
-                forceFollowCamera = true;
-                
-                playTurboSound();
-                addScore(20);
+                skater.isOnGround = false; forceFollowCamera = true;
+                playTurboSound(); addScore(20);
 
                 for (let i = 0; i < 25; i++) {
                     particles.push({
-                        x: skater.x - Math.cos(skater.angle) * 15,
-                        y: skater.y - Math.sin(skater.angle) * 15,
+                        x: skater.x - Math.cos(skater.angle) * 15, y: skater.y - Math.sin(skater.angle) * 15,
                         vx: -Math.cos(skater.angle) * (Math.random() * 6 + 2) + (Math.random() * 2 - 1),
                         vy: -Math.sin(skater.angle) * (Math.random() * 6 + 2) + (Math.random() * 2 - 1),
-                        size: Math.random() * 8 + 4,
-                        life: 1.0,
-                        decay: Math.random() * 0.05 + 0.03,
+                        size: Math.random() * 8 + 4, life: 1.0, decay: Math.random() * 0.05 + 0.03,
                         color: Math.random() > 0.4 ? '#ff5500' : '#ffcc00'
                     });
                 }
@@ -327,18 +361,40 @@
             if (skater.isActive && !skater.isOnGround && !skater.isSpinning360) {
                 skater.isSpinning360 = true; skater.spinTimer = 0;
                 skater.spinBaseAngle = skater.angle; skater.vy = -5.0;
-                forceFollowCamera = true;
-                playSpinSound();
-                addScore(10);
+                forceFollowCamera = true; playSpinSound(); addScore(10);
             }
         }
 
-        // --- Input Mapping ---
+        // --- Toolbar & Extended Color Matrix Handling ---
+        const btnDraw = document.getElementById('btn-draw');
+        const btnErase = document.getElementById('btn-erase');
+        
+        btnDraw.addEventListener('click', () => { currentMode = 'draw'; btnDraw.classList.add('active'); btnErase.classList.remove('active'); });
+        btnErase.addEventListener('click', () => { currentMode = 'erase'; btnErase.classList.add('active'); btnDraw.classList.remove('active'); });
+
+        // Map event listeners cleanly across the entire visual palette matrix loop
+        document.querySelectorAll('.swatch').forEach(swatch => {
+            swatch.addEventListener('click', (e) => {
+                document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
+                swatch.classList.add('active');
+                
+                // Read inline hex background styles safely from DOM nodes
+                const rgbaColor = swatch.style.backgroundColor;
+                // Convert to canvas processing format
+                selectedColor = rgbaColor;
+                
+                currentMode = 'draw';
+                btnDraw.classList.add('active'); btnErase.classList.remove('active');
+            });
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => { lines = []; skater.isActive = false; resetScore(); });
+
+        // --- Hardware Device Inputs Map ---
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') { keys.Left = true; forceFollowCamera = true; }
             if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') { keys.Right = true; forceFollowCamera = true; }
-            if (e.key === ' ') spawnSkater(window.innerWidth / 2, 100);
-            if (e.key.toLowerCase() === 'r') { lines = []; cameraX = 0; skater.isActive = false; resetScore(); }
+            if (e.key === ' ') spawnSkater(window.innerWidth / 2, window.innerHeight / 2);
             if (e.key.toLowerCase() === 'k') triggerKickflip();
             if (e.key.toLowerCase() === 'x') triggerOllie();
             if (e.key.toLowerCase() === 'o') triggerTurboBoost();
@@ -360,26 +416,25 @@
         document.getElementById('btn-cross').addEventListener('touchstart', (e) => { e.preventDefault(); triggerOllie(); });
         document.getElementById('btn-circle').addEventListener('touchstart', (e) => { e.preventDefault(); triggerTurboBoost(); });
         document.getElementById('btn-triangle').addEventListener('touchstart', (e) => { e.preventDefault(); trigger360Spin(); });
-        
-        document.getElementById('btn-clear').addEventListener('click', () => { lines = []; cameraX = 0; skater.isActive = false; resetScore(); });
 
-        // --- Touch & Pan Core Logic ---
+        // --- Infinite Pointer Matrix Tracking ---
         function handlePointerDown(e) {
-            if (e.target.closest('#controls') || e.target.closest('#btn-clear')) return;
+            if (e.target.closest('#controls') || e.target.closest('#toolbar')) return;
             const isTouch = e.touches !== undefined, count = isTouch ? e.touches.length : 0;
 
             if ((!isTouch && e.button === 2) || (isTouch && count === 2)) {
-                isDrawing = false; 
-                isPanning = true;
-                forceFollowCamera = false; // Turn off auto-follow when manually scanning around
+                isDrawing = false; isPanning = true; forceFollowCamera = false;
                 panStartPoint.x = isTouch ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
+                panStartPoint.y = isTouch ? (e.touches[0].clientY + e.touches[1].clientY) / 2 : e.clientY;
                 return;
             }
             if (!isPanning && (!isTouch || count === 1)) {
                 isDrawing = true;
                 const cx = isTouch ? e.touches[0].clientX : e.clientX, cy = isTouch ? e.touches[0].clientY : e.clientY;
-                startPoint = { x: cx + cameraX, y: cy }; touchStartPos = { x: cx, y: cy };
+                startPoint = { x: cx + cameraX, y: cy + cameraY }; touchStartPos = { x: cx, y: cy };
                 hasMovedSignificantly = false;
+
+                if (currentMode === 'erase') eraseSegmentsAt(cx + cameraX, cy + cameraY);
             }
         }
 
@@ -387,26 +442,43 @@
             const isTouch = e.touches !== undefined;
             if (isPanning) {
                 const cx = isTouch ? (e.touches[0].clientX + e.touches[1].clientX) / 2 : e.clientX;
-                cameraX -= (cx - panStartPoint.x); panStartPoint.x = cx;
+                const cy = isTouch ? (e.touches[0].clientY + e.touches[1].clientY) / 2 : e.clientY;
+                cameraX -= (cx - panStartPoint.x); cameraY -= (cy - panStartPoint.y);
+                panStartPoint.x = cx; panStartPoint.y = cy;
                 return;
             }
             if (!isDrawing) return;
             const cx = isTouch ? e.touches[0].clientX : e.clientX, cy = isTouch ? e.touches[0].clientY : e.clientY;
             if (Math.hypot(cx - touchStartPos.x, cy - touchStartPos.y) > 10) hasMovedSignificantly = true;
 
-            if (hasMovedSignificantly) {
-                const wx = cx + cameraX;
-                if (Math.hypot(wx - startPoint.x, cy - startPoint.y) > 5) {
-                    lines.push({ p1: { ...startPoint }, p2: { x: wx, y: cy } });
-                    startPoint = { x: wx, y: cy };
+            const worldX = cx + cameraX;
+            const worldY = cy + cameraY;
+
+            if (currentMode === 'draw' && hasMovedSignificantly) {
+                if (Math.hypot(worldX - startPoint.x, worldY - startPoint.y) > 5) {
+                    lines.push({ p1: { ...startPoint }, p2: { x: worldX, y: worldY }, color: selectedColor });
+                    startPoint = { x: worldX, y: worldY };
                 }
+            } else if (currentMode === 'erase') {
+                eraseSegmentsAt(worldX, worldY);
             }
         }
 
         function handlePointerUp() {
             if (isPanning) { isPanning = false; return; }
             if (!isDrawing) return; isDrawing = false;
-            if (!hasMovedSignificantly) spawnSkater(touchStartPos.x, touchStartPos.y);
+            if (currentMode === 'draw' && !hasMovedSignificantly) spawnSkater(touchStartPos.x, touchStartPos.y);
+        }
+
+        function eraseSegmentsAt(worldX, worldY) {
+            const eraseRadius = 20;
+            for (let i = lines.length - 1; i >= 0; i--) {
+                let segment = lines[i];
+                let closest = closestPointOnSegment({ x: worldX, y: worldY }, segment.p1, segment.p2);
+                if (Math.hypot(worldX - closest.x, worldY - closest.y) < eraseRadius) {
+                    lines.splice(i, 1);
+                }
+            }
         }
 
         window.addEventListener('mousedown', handlePointerDown); window.addEventListener('mousemove', handlePointerMove); window.addEventListener('mouseup', handlePointerUp);
@@ -418,18 +490,15 @@
             return { x: a.x + Math.max(0, Math.min(1, t)) * ab.x, y: a.y + Math.max(0, Math.min(1, t)) * ab.y };
         }
 
-        // --- Physics Loop ---
+        // --- Core Physics System ---
         function update() {
             for (let i = particles.length - 1; i >= 0; i--) {
-                let p = particles[i];
-                p.x += p.vx; p.y += p.vy;
-                p.life -= p.decay;
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
                 if (p.life <= 0) particles.splice(i, 1);
             }
 
             if (skater.isActive) {
                 skater.vy += skater.gravity;
-
                 if (keys.Left) { skater.angularVelocity -= 0.007; if (skater.isOnGround) skater.vx -= 0.18; }
                 if (keys.Right) { skater.angularVelocity += 0.007; if (skater.isOnGround) skater.vx += 0.18; }
 
@@ -437,16 +506,14 @@
                 
                 if (skater.isSpinning360) {
                     skater.spinTimer++;
-                    const ratio = skater.spinTimer / skater.spinDuration;
-                    skater.angle = skater.spinBaseAngle + ratio * Math.PI * 2;
+                    skater.angle = skater.spinBaseAngle + (skater.spinTimer / skater.spinDuration) * Math.PI * 2;
                     if (skater.spinTimer >= skater.spinDuration) skater.isSpinning360 = false;
                 } else {
                     skater.angle += skater.angularVelocity;
                 }
 
                 skater.vx *= skater.isOnGround ? skater.friction : skater.airResistance;
-                skater.vy *= skater.airResistance;
-                skater.angularVelocity *= 0.94;
+                skater.vy *= skater.airResistance; skater.angularVelocity *= 0.94;
 
                 if (skater.isKickflipping) {
                     skater.kickflipTimer++;
@@ -461,7 +528,13 @@
                     const distX = skater.x - closest.x, distY = skater.y - closest.y, dist = Math.hypot(distX, distY);
 
                     if (dist < skater.radius) {
-                        if (skater.isKickflipping || skater.isSpinning360) { skater.isActive = false; playCrashSound(); resetScore(); return; }
+                        // CRASH TRIGGER CODE OVERHAUL: Respawns skater back at active checkpoint coordinates
+                        if (skater.isKickflipping || skater.isSpinning360) { 
+                            playCrashSound(); 
+                            resetScore(); 
+                            triggerRespawn(); 
+                            return; 
+                        }
 
                         skater.isOnGround = true;
                         let nx = distX / (dist || 1), ny = distY / (dist || 1);
@@ -476,40 +549,43 @@
                     }
                 });
 
-                if (skater.y > canvas.height + 300) { skater.isActive = false; playCrashSound(); resetScore(); }
+                // Void boundary fall trigger also loops skater back into active checkpoint coordinates
+                if (skater.y > cameraY + canvas.height + 600) {
+                    playCrashSound();
+                    resetScore();
+                    triggerRespawn();
+                }
             }
 
-            // --- Camera Engine Logic Execution ---
             if (skater.isActive && forceFollowCamera && !isPanning) {
-                // Target X makes sure the skater stays relative to the center of the viewport
-                const targetCameraX = skater.x - canvas.width / 2;
-                // Linear Interpolation (Lerp) creates the fluid tracking feel (0.08 = 8% camera travel speed per frame)
-                cameraX += (targetCameraX - cameraX) * 0.08;
+                cameraX += ((skater.x - canvas.width / 2) - cameraX) * 0.08;
+                cameraY += ((skater.y - canvas.height / 2) - cameraY) * 0.08;
             }
         }
 
         // --- Render Engine ---
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save(); ctx.translate(-cameraX, 0);
+            ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-            // Matrix Grid Track Layer Background
+            // Grid Architecture
             ctx.strokeStyle = '#2d2d2d'; ctx.lineWidth = 1;
             const startGridX = Math.floor(cameraX / 40) * 40;
-            for(let x = startGridX; x < startGridX + canvas.width + 40; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
-            for(let y = 0; y < canvas.height; y += 40) { ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX + canvas.width, y); ctx.stroke(); }
+            const startGridY = Math.floor(cameraY / 40) * 40;
+            for(let x = startGridX; x < startGridX + canvas.width + 40; x += 40) { ctx.beginPath(); ctx.moveTo(x, cameraY); ctx.lineTo(x, cameraY + canvas.height); ctx.stroke(); }
+            for(let y = startGridY; y < startGridY + canvas.height + 40; y += 40) { ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX + canvas.width, y); ctx.stroke(); }
 
-            // Vector Ramps
-            ctx.strokeStyle = '#00ffcc'; ctx.lineWidth = 5; ctx.lineCap = 'round';
-            lines.forEach(line => { ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke(); });
+            // Dynamic Path Vectors 
+            ctx.lineWidth = 5; ctx.lineCap = 'round';
+            lines.forEach(line => { ctx.strokeStyle = line.color || '#00ffcc'; ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke(); });
 
-            // Fire Particles
+            // Fire Matrix Elements
             particles.forEach(p => {
                 ctx.save(); ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill(); ctx.restore();
             });
 
-            // Skater
+            // Draw Skater Figure
             if (skater.isActive) {
                 ctx.save(); ctx.translate(skater.x, skater.y); ctx.rotate(skater.angle);
 
@@ -522,7 +598,7 @@
                 }
                 ctx.stroke();
 
-                // Deck
+                // Board Assembly
                 ctx.save(); ctx.translate(0, 6);
                 if (skater.isKickflipping) ctx.scale(1, Math.cos(skater.boardFlipAngle));
                 ctx.fillStyle = '#ff3366'; ctx.fillRect(-18, -2.5, 36, 5);
