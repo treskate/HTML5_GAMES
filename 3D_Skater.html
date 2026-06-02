@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Pro Skater (THPS Style)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace; /* Use a pixelated font for HUD */
+            background-color: #eee; /* Default background */
+        }
+        canvas {
+            display: block;
+        }
+
+        /* --- HUD Elements based on the image --- */
+        #ui {
+            position: absolute;
+            color: #fff;
+            text-shadow: 2px 2px #000;
+            pointer-events: none; /* Make UI unclickable so inputs pass through */
+        }
+
+        /* Top-Left: Score and Special Meter */
+        #top-left-hud {
+            top: 20px;
+            left: 20px;
+        }
+        #score-label, #score-value {
+            font-size: 24px;
+            text-transform: uppercase;
+        }
+        #score-value {
+            color: #ff0; /* Yellow score from image */
+            font-weight: bold;
+        }
+        #special-bar-container {
+            width: 200px;
+            height: 15px;
+            border: 3px solid #666;
+            background-color: #333;
+            margin-top: 5px;
+            position: relative;
+        }
+        #special-bar-fill {
+            height: 100%;
+            background-color: #0f0; /* Green bar from image */
+            width: 0%; /* Initial fill */
+            box-shadow: 0 0 10px #0f0; /* Slight glow effect */
+            transition: width 0.1s ease-out;
+        }
+        #special-text {
+            position: absolute;
+            top: -2px;
+            left: 5px;
+            font-size: 14px;
+            font-weight: bold;
+            color: #fff;
+        }
+
+        /* Top-Right: Timer */
+        #top-right-hud {
+            top: 20px;
+            right: 20px;
+            font-size: 36px;
+            color: #f33; /* Reddish timer color from image */
+            font-weight: bold;
+        }
+
+        /* Bottom-Center: Trick Combo and Score */
+        #bottom-center-hud {
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+        }
+        #trick-text {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        #combo-score {
+            font-size: 20px;
+            color: #ff0; /* Combo score in yellow */
+        }
+        #multiplier {
+            color: #fff; /* Multiplier in white */
+        }
+
+        #controls-guide {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: #aaa;
+            font-size: 14px;
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="top-left-hud">
+            <div id="score-label">SCORE</div>
+            <div id="score-value">0</div>
+            <div id="special-bar-container">
+                <div id="special-bar-fill"></div>
+                <span id="special-text">SPECIAL</span>
+            </div>
+        </div>
+
+        <div id="top-right-hud">2:00</div>
+
+        <div id="bottom-center-hud">
+            <div id="trick-text"></div>
+            <div id="combo-score">0 <span id="multiplier">X0</span></div>
+        </div>
+    </div>
+
+    <div id="controls-guide">
+        Arrows/WASD: Move | Space: Ollie | W/Triangle: Grind
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- 3D Scene Setup ---
+        const scene = new THREE.Scene();
+        // Fog to add atmosphere, like the original image
+        scene.fog = new THREE.FogExp2(0xaaaaaa, 0.005); 
+        scene.background = new THREE.Color(0xaaaaaa); // Hazy sky
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false }); // Disable antialiasing for retro look
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Lighting ---
+        // Basic ambient light for general visibility
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // Directional light for shadows, to create depth on the rooftop
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(10, 15, 10);
+        directionalLight.castShadow = true;
+        scene.add(directionalLight);
+
+        // --- Environment (Rooftop) ---
+        const textureLoader = new THREE.TextureLoader();
+        const groundTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/hardwood2_diffuse.jpg'); // Placeholder for red roof tiles
+        groundTexture.wrapS = groundTexture.wrapT = THREE.RepeatWrapping;
+        groundTexture.repeat.set(50, 50);
+
+        const groundGeometry = new THREE.PlaneGeometry(100, 100);
+        const groundMaterial = new THREE.MeshLambertMaterial({ map: groundTexture });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // --- Building Ledges (Grind Boxes) ---
+        // We'll create boxes similar to those in the image
+        function createLedge(width, height, depth, x, z) {
+            const ledgeGeometry = new THREE.BoxGeometry(width, height, depth);
+            const ledgeMaterial = new THREE.MeshLambertMaterial({ color: 0x888888 }); // Concrete-like color
+            const ledge = new THREE.Mesh(ledgeGeometry, ledgeMaterial);
+            ledge.position.set(x, height / 2, z);
+            ledge.castShadow = true;
+            ledge.receiveShadow = true;
+            
+            // Add metal coping (grind rail) to the top edge
+            const railGeometry = new THREE.BoxGeometry(width + 0.1, 0.1, 0.2);
+            const railMaterial = new THREE.MeshLambertMaterial({ color: 0xcccccc, shininess: 100 });
+            const rail = new THREE.Mesh(railGeometry, railMaterial);
+            rail.position.set(0, height / 2, depth / 2 + 0.1);
+            ledge.add(rail);
+
+            scene.add(ledge);
+            return ledge;
+        }
+
+        const ledge1 = createLedge(10, 1.5, 3, -15, -10); // Similar to the left ledge in the image
+        const ledge2 = createLedge(8, 1, 2, 5, 15);     // Nearer box
+
+        // --- Surrounding Buildings ---
+        // Simple textured boxes for the background buildings
+        const buildingTexture = textureLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/brick_diffuse.jpg');
+        const buildingGeometry = new THREE.BoxGeometry(20, 30, 20);
+        const buildingMaterial = new THREE.MeshLambertMaterial({ map: buildingTexture });
+        const building1 = new THREE.Mesh(buildingGeometry, buildingMaterial);
+        building1.position.set(-30, 15, -40);
+        scene.add(building1);
+
+        // Second building, like the one on the right in the image
+        const buildingGeometry2 = new THREE.BoxGeometry(25, 20, 15);
+        const buildingMaterial2 = new THREE.MeshLambertMaterial({ color: 0xdddddd }); // Lighter stucco-like color
+        const building2 = new THREE.Mesh(buildingGeometry2, buildingMaterial2);
+        building2.position.set(30, 10, -35);
+        scene.add(building2);
+
+        // --- Player (Skater) ---
+        let player = {
+            mesh: null,
+            mixer: null, // For animation
+            actions: {},
+            currentAction: 'idle',
+            speed: 0,
+            direction: 0,
+            maxSpeed: 0.2,
+            isGrinding: false,
+            canOllie: true,
+            velocity: new THREE.Vector3(),
+            groundHeight: 0,
+            ledgeGrindSpeed: 0.15
+        };
+
+        // Load the skater model and textures
+        const loader = new GLTFLoader();
+        // Replace with a URL to a suitable model, or host it locally
+        const modelUrl = 'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/RobotExpressive/RobotExpressive.glb'; 
+        loader.load(modelUrl, function (gltf) {
+            player.mesh = gltf.scene;
+            player.mesh.scale.set(0.5, 0.5, 0.5); // Adjust scale as needed
+            player.mesh.position.y = 0.5; // Start just above ground
+            player.mesh.castShadow = true;
+            player.mesh.receiveShadow = true;
+            scene.add(player.mesh);
+
+            // Set up animations
+            player.mixer = new THREE.AnimationMixer(player.mesh);
+            const animations = gltf.animations;
+            if (animations.length > 0) {
+                // Find and map common animations (these names vary by model)
+                // You'll need a model with suitable skate animations
+                player.actions['idle'] = player.mixer.clipAction(THREE.AnimationClip.findByName(animations, 'Idle'));
+                player.actions['skate'] = player.mixer.clipAction(THREE.AnimationClip.findByName(animations, 'Walking')); 
+                player.actions['grind'] = player.mixer.clipAction(THREE.AnimationClip.findByName(animations, 'Dance')); // Substitute for now
+                player.actions['idle'].play();
+            }
+        });
+
+        // --- Camera Follow System ---
+        // Over-the-shoulder view like the original game
+        const cameraOffset = new THREE.Vector3(0, 5, -8); // Adjust for the desired view
+
+        function updateCamera() {
+            if (!player.mesh) return;
+
+            const relativeCameraOffset = cameraOffset.clone().applyMatrix4(player.mesh.matrixWorld);
+            camera.position.lerp(relativeCameraOffset, 0.1); // Smooth camera follow
+            camera.lookAt(player.mesh.position.clone().add(new THREE.Vector3(0, 1.5, 0))); // Look at the skater's upper body
+        }
+
+        // --- Input and Movement ---
+        const keys = { w: false, a: false, s: false, d: false, space: false, g: false };
+        let mouseX = 0, mouseY = 0;
+
+        window.addEventListener('keydown', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w') keys.w = true;
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.a = true;
+            if (e.key === 'ArrowDown' || e.key === 's') keys.s = true;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.d = true;
+            if (e.key === ' ') keys.space = true;
+            if (e.key === 'g' || e.key === 'w') keys.g = true; // 'W' to grind, or 'G'
+        });
+
+        window.addEventListener('keyup', e => {
+            if (e.key === 'ArrowUp' || e.key === 'w') keys.w = false;
+            if (e.key === 'ArrowLeft' || e.key === 'a') keys.a = false;
+            if (e.key === 'ArrowDown' || e.key === 's') keys.s = false;
+            if (e.key === 'ArrowRight' || e.key === 'd') keys.d = false;
+            if (e.key === ' ') keys.space = false;
+            if (e.key === 'g' || e.key === 'w') keys.g = false;
+        });
+
+        function updatePlayerMovement() {
+            if (!player.mesh) return;
+
+            // Simple movement logic
+            if (keys.w) player.speed += (player.maxSpeed - player.speed) * 0.1;
+            else if (keys.s) player.speed -= (player.maxSpeed + player.speed) * 0.1;
+            else player.speed *= 0.95; // Friction
+
+            if (keys.a) player.direction += 0.05;
+            if (keys.d) player.direction -= 0.05;
+
+            // Ollie (Jump) logic
+            if (keys.space && player.canOllie) {
+                player.velocity.y = 0.15; // Set upward jump velocity
+                player.canOllie = false;
+                player.groundHeight = 0;
+            }
+
+            // --- Apply Physics ---
+            // Move player
+            player.mesh.position.x += player.speed * Math.sin(player.direction);
+            player.mesh.position.z += player.speed * Math.cos(player.direction);
+            
+            // Gravity
+            player.velocity.y -= 0.005; // Gravity constant
+            player.mesh.position.y += player.velocity.y;
+
+            // Ground collision and resetting canOllie
+            if (player.mesh.position.y < player.groundHeight + 0.5) {
+                player.mesh.position.y = player.groundHeight + 0.5;
+                player.velocity.y = 0;
+                player.canOllie = true;
+            }
+
+            player.mesh.rotation.y = player.direction;
+
+            // --- Animation State Management ---
+            // Update animations based on player state
+            let nextAction = 'idle';
+            if (!player.canOllie) nextAction = 'idle'; // Adjust if you have a jump clip
+            else if (Math.abs(player.speed) > 0.01) nextAction = 'skate';
+            else nextAction = 'idle';
+
+            if (player.mixer && player.actions[nextAction] && player.currentAction !== nextAction) {
+                player.actions[player.currentAction].fadeOut(0.2);
+                player.actions[nextAction].reset().fadeIn(0.2).play();
+                player.currentAction = nextAction;
+            }
+        }
+
+        // --- Grinding Logic ---
+        function checkGrindableLedges() {
+            if (!player.mesh || !keys.g) return;
+
+            const playerPos = player.mesh.position;
+            // Check proximity to ledge 1
+            if (Math.abs(playerPos.x - ledge1.position.x) < 5 && Math.abs(playerPos.z - ledge1.position.z) < 1.5) {
+                // If player is above the ledge and moving
+                if (playerPos.y > 1.4 && player.speed > 0) {
+                    initiateGrind(ledge1);
+                }
+            }
+            // Add checks for other ledge
+        }
+
+        function initiateGrind(ledge) {
+            player.isGrinding = true;
+            player.velocity.y = 0; // Lock vertical movement
+            player.speed = player.ledgeGrindSpeed; // Set grind speed
+            player.groundHeight = ledge.position.y + 0.75; // Set grind height
+            player.mesh.position.y = player.groundHeight + 0.5; // Snap to rail height
+
+            // Switch to grind animation
+            if (player.mixer && player.actions['grind']) {
+                player.actions[player.currentAction].fadeOut(0.1);
+                player.actions['grind'].reset().fadeIn(0.1).play();
+                player.currentAction = 'grind';
+            }
+        }
+
+        // --- Game HUD System ---
+        // Mimicking the original layout from the image
+        const scoreLabelEl = document.getElementById('score-value');
+        const specialBarEl = document.getElementById('special-bar-fill');
+        const timerEl = document.getElementById('top-right-hud');
+        const trickTextEl = document.getElementById('trick-text');
+        const comboScoreEl = document.getElementById('combo-score');
+
+        let totalScore = 0;
+        let specialMeter = 0;
+        const gameTimeSeconds = 120; // 2 minutes
+        let currentTimeSeconds = gameTimeSeconds;
+
+        function updateHUD() {
+            scoreLabelEl.innerText = totalScore.toString().padStart(5, '0'); // Pad with zeros like original
+            specialBarEl.style.width = specialMeter + '%';
+
+            // Special bar effect: once full, make it flash or stay full
+            if (specialMeter >= 100) {
+                specialMeter = 100;
+                specialBarEl.style.boxShadow = "0 0 20px #0f0";
+            } else {
+                specialBarEl.style.boxShadow = "0 0 10px #0f0";
+            }
+
+            // Simple timer countdown
+            currentTimeSeconds -= (1 / 60); // Assuming 60fps
+            if (currentTimeSeconds < 0) currentTimeSeconds = 0;
+            const minutes = Math.floor(currentTimeSeconds / 60);
+            const seconds = Math.floor(currentTimeSeconds % 60);
+            timerEl.innerText = minutes + ':' + seconds.toString().padStart(2, '0');
+        }
+
+        // Add to the main loop to periodically simulate tricks for UI display
+        let currentTrick = "BS OVERCROOK + POP SHOVE IT"; // Mimic from image
+        let comboScoreVal = 1097;
+        let comboMultiplierVal = 2;
+
+        function showSimulatedTrick() {
+            trickTextEl.innerText = currentTrick;
+            comboScoreEl.innerHTML = `${comboScoreVal} <span id="multiplier">X${comboMultiplierVal}</span>`;
+            totalScore += comboScoreVal * comboMultiplierVal;
+            specialMeter += 15; // Increment special bar on trick land
+        }
+
+        // Simulating landing a trick after some time
+        setTimeout(showSimulatedTrick, 5000); 
+
+        // --- Main Game Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updatePlayerMovement();
+            updateCamera();
+            checkGrindableLedges();
+            updateHUD();
+
+            // Update animation mixer if it exists
+            if (player.mixer) {
+                player.mixer.update(0.016); // Simulate delta time
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resizing
+        window.addEventListener('resize', onWindowResize, false);
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // Start the game
+        animate();
+
+    </script>
+</body>
+</html>
