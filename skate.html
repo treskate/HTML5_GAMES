@@ -161,7 +161,7 @@
 
     <div id="ui">
         <h1>Arcade Infinite Skate</h1>
-        <p>▢ Kickflip (+5) | ✕ Ollie (+2) | Δ 360 (+10) | ◯ Turbo (+20)</p>
+        <p>▢ Kickflip (+5) | ✕ Ollie (+5) | Δ 360 (+10) | ◯ Turbo (+20)</p>
         <p>Pan Workspace: Right-click + Drag / 2-Finger Touch</p>
         <div class="score-display" id="scoreBoard">SCORE: 00000</div>
     </div>
@@ -177,6 +177,7 @@
             <div class="swatch" id="swatch-yellow" style="background: #ffcc00;" title="Yellow"></div>
             <div class="swatch" id="swatch-purple" style="background: #9b5de5;" title="Purple"></div>
         </div>
+        <button id="btn-respawn" class="tool-btn" style="border-color:#ffcc00; color:#ffcc00;">Respawn</button>
         <button id="btn-clear" class="tool-btn" style="border-color:#a63232;">Clear All</button>
     </div>
 
@@ -300,7 +301,6 @@
 
         function spawnSkater(screenX, screenY) {
             initAudio();
-            // Assign world position coordinates
             checkpointX = screenX + cameraX;
             checkpointY = screenY + cameraY;
             
@@ -308,7 +308,6 @@
             resetScore();
         }
 
-        // Resets state logic and places skater back at the active checkpoint marker coordinates
         function triggerRespawn() {
             skater.x = checkpointX;
             skater.y = checkpointY;
@@ -332,7 +331,7 @@
         function triggerOllie() {
             if (skater.isActive) {
                 skater.vy = -6.5; skater.isOnGround = false;
-                forceFollowCamera = true; playOllieSound(); addScore(2);
+                forceFollowCamera = true; playOllieSound(); addScore(5); // Ollies updated to +5 points
                 skater.isKickflipping = false;
             }
         }
@@ -365,36 +364,33 @@
             }
         }
 
-        // --- Toolbar & Extended Color Matrix Handling ---
+        // --- Toolbar & Palette Wireframes ---
         const btnDraw = document.getElementById('btn-draw');
         const btnErase = document.getElementById('btn-erase');
         
         btnDraw.addEventListener('click', () => { currentMode = 'draw'; btnDraw.classList.add('active'); btnErase.classList.remove('active'); });
         btnErase.addEventListener('click', () => { currentMode = 'erase'; btnErase.classList.add('active'); btnDraw.classList.remove('active'); });
 
-        // Map event listeners cleanly across the entire visual palette matrix loop
         document.querySelectorAll('.swatch').forEach(swatch => {
-            swatch.addEventListener('click', (e) => {
+            swatch.addEventListener('click', () => {
                 document.querySelectorAll('.swatch').forEach(s => s.classList.remove('active'));
                 swatch.classList.add('active');
-                
-                // Read inline hex background styles safely from DOM nodes
-                const rgbaColor = swatch.style.backgroundColor;
-                // Convert to canvas processing format
-                selectedColor = rgbaColor;
-                
+                selectedColor = swatch.style.backgroundColor;
                 currentMode = 'draw';
                 btnDraw.classList.add('active'); btnErase.classList.remove('active');
             });
         });
 
+        // Toolbar Action Button Triggers
+        document.getElementById('btn-respawn').addEventListener('click', () => { if (skater.isActive) triggerRespawn(); });
         document.getElementById('btn-clear').addEventListener('click', () => { lines = []; skater.isActive = false; resetScore(); });
 
-        // --- Hardware Device Inputs Map ---
+        // --- Input Mappings ---
         window.addEventListener('keydown', (e) => {
             if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'a') { keys.Left = true; forceFollowCamera = true; }
             if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'd') { keys.Right = true; forceFollowCamera = true; }
             if (e.key === ' ') spawnSkater(window.innerWidth / 2, window.innerHeight / 2);
+            if (e.key.toLowerCase() === 'r') { if (skater.isActive) triggerRespawn(); } // 'R' hotkey binds manual respawn
             if (e.key.toLowerCase() === 'k') triggerKickflip();
             if (e.key.toLowerCase() === 'x') triggerOllie();
             if (e.key.toLowerCase() === 'o') triggerTurboBoost();
@@ -417,7 +413,7 @@
         document.getElementById('btn-circle').addEventListener('touchstart', (e) => { e.preventDefault(); triggerTurboBoost(); });
         document.getElementById('btn-triangle').addEventListener('touchstart', (e) => { e.preventDefault(); trigger360Spin(); });
 
-        // --- Infinite Pointer Matrix Tracking ---
+        // --- Infinite Workspace Mechanics ---
         function handlePointerDown(e) {
             if (e.target.closest('#controls') || e.target.closest('#toolbar')) return;
             const isTouch = e.touches !== undefined, count = isTouch ? e.touches.length : 0;
@@ -490,7 +486,7 @@
             return { x: a.x + Math.max(0, Math.min(1, t)) * ab.x, y: a.y + Math.max(0, Math.min(1, t)) * ab.y };
         }
 
-        // --- Core Physics System ---
+        // --- Core Physics Engine ---
         function update() {
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
@@ -528,7 +524,6 @@
                     const distX = skater.x - closest.x, distY = skater.y - closest.y, dist = Math.hypot(distX, distY);
 
                     if (dist < skater.radius) {
-                        // CRASH TRIGGER CODE OVERHAUL: Respawns skater back at active checkpoint coordinates
                         if (skater.isKickflipping || skater.isSpinning360) { 
                             playCrashSound(); 
                             resetScore(); 
@@ -549,7 +544,6 @@
                     }
                 });
 
-                // Void boundary fall trigger also loops skater back into active checkpoint coordinates
                 if (skater.y > cameraY + canvas.height + 600) {
                     playCrashSound();
                     resetScore();
@@ -568,24 +562,24 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save(); ctx.translate(-cameraX, -cameraY);
 
-            // Grid Architecture
+            // Grid Layout
             ctx.strokeStyle = '#2d2d2d'; ctx.lineWidth = 1;
             const startGridX = Math.floor(cameraX / 40) * 40;
             const startGridY = Math.floor(cameraY / 40) * 40;
             for(let x = startGridX; x < startGridX + canvas.width + 40; x += 40) { ctx.beginPath(); ctx.moveTo(x, cameraY); ctx.lineTo(x, cameraY + canvas.height); ctx.stroke(); }
             for(let y = startGridY; y < startGridY + canvas.height + 40; y += 40) { ctx.beginPath(); ctx.moveTo(cameraX, y); ctx.lineTo(cameraX + canvas.width, y); ctx.stroke(); }
 
-            // Dynamic Path Vectors 
+            // Paths 
             ctx.lineWidth = 5; ctx.lineCap = 'round';
             lines.forEach(line => { ctx.strokeStyle = line.color || '#00ffcc'; ctx.beginPath(); ctx.moveTo(line.p1.x, line.p1.y); ctx.lineTo(line.p2.x, line.p2.y); ctx.stroke(); });
 
-            // Fire Matrix Elements
+            // Particles
             particles.forEach(p => {
                 ctx.save(); ctx.globalAlpha = p.life; ctx.fillStyle = p.color; ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill(); ctx.restore();
             });
 
-            // Draw Skater Figure
+            // Skater Figure
             if (skater.isActive) {
                 ctx.save(); ctx.translate(skater.x, skater.y); ctx.rotate(skater.angle);
 
