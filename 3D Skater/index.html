@@ -3,645 +3,255 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Big Nick's Skatepark - Pro Skater</title>
+    <title>Big Nick's Skatepark - HTML5 Edition</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #556677;
+        body { margin: 0; overflow: hidden; background: #000; }
+        canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+        #scoreBoard {
+            position: absolute; top: 20px; left: 20px;
+            color: cyan; font-family: 'Courier New', monospace; font-size: 24px;
+            text-shadow: 2px 2px 0px #000; pointer-events: none;
         }
-        canvas {
-            display: block;
+        #specialMeter {
+            position: absolute; top: 60px; left: 20px;
+            width: 200px; height: 10px; border: 2px solid cyan;
+            background: #222; overflow: hidden;
         }
-
-        /* --- HUD Layout --- */
-        #ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            color: #fff;
-            text-shadow: 2px 2px #000;
-            pointer-events: none;
-            box-sizing: border-box;
-        }
-        #top-left-hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-        }
-        #score-label, #score-value {
-            font-size: 26px;
-            text-transform: uppercase;
-        }
-        #score-value {
-            color: #ff0;
-            font-weight: bold;
-        }
-        #special-bar-container {
-            width: 250px;
-            height: 18px;
-            border: 3px solid #444;
-            background-color: #222;
-            margin-top: 5px;
-            position: relative;
-        }
-        #special-bar-fill {
-            height: 100%;
-            background-color: #0f0;
-            width: 20%;
-            box-shadow: 0 0 10px #0f0;
-        }
-        #special-text {
-            position: absolute;
-            top: -1px;
-            left: 8px;
-            font-size: 13px;
-            font-weight: bold;
-            color: #fff;
-        }
-        #top-right-hud {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            font-size: 36px;
-            color: #f33;
-            font-weight: bold;
-        }
-        #bottom-center-hud {
-            position: absolute;
-            bottom: 40px;
-            width: 100%;
-            text-align: center;
-        }
-        #trick-text {
-            font-size: 28px;
-            margin-bottom: 5px;
-            color: #00ffcc;
-            font-weight: bold;
-            min-height: 32px;
-        }
-        #combo-score {
-            font-size: 22px;
-            color: #ff0;
-        }
-        #multiplier {
-            color: #fff;
-        }
-        #controls-guide {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            color: #ccc;
-            font-size: 12px;
-            text-align: right;
-            text-shadow: 1px 1px #000;
+        #specialMeterBar { width: 0%; height: 100%; background: lime; }
+        #timer {
+            position: absolute; top: 20px; right: 20px;
+            color: tomato; font-family: 'Courier New', monospace; font-size: 48px;
+            text-shadow: 2px 2px 0px #000; pointer-events: none;
         }
     </style>
 </head>
 <body>
+    <div id="scoreBoard">SCORE: 0</div>
+    <div id="specialMeter"><div id="specialMeterBar"></div></div>
+    <div id="timer">2:00</div>
+    <canvas id="renderCanvas"></canvas>
 
-    <div id="ui">
-        <div id="top-left-hud">
-            <div id="score-label">SCORE</div>
-            <div id="score-value">00000</div>
-            <div id="special-bar-container">
-                <div id="special-bar-fill"></div>
-                <span id="special-text">SPECIAL</span>
-            </div>
-        </div>
-        <div id="top-right-hud">2:00</div>
-        <div id="bottom-center-hud">
-            <div id="trick-text"></div>
-            <div id="combo-score"></div>
-        </div>
-    </div>
-
-    <div id="controls-guide">
-        WASD / Arrows: Steer | Spacebar: Ollie (Hold to Crouch/Release to Jump) | Shift: Kickflip | W / I Key: Grind
-    </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/cannon.js"></script>
 
     <script>
-        // --- Game Logic States ---
-        let totalScore = 0;
-        let currentComboPoints = 0;
-        let currentComboMultiplier = 0;
-        let specialMeter = 20;
-        let activeTricks = [];
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+        let score = 0;
+        let specialVal = 0;
         let timerSeconds = 120;
+        const scoreBoard = document.getElementById("scoreBoard");
+        const specialMeterBar = document.getElementById("specialMeterBar");
+        const timerBoard = document.getElementById("timer");
 
-        // Special 2x Acceleration Clock triggers
-        let isSpecialActive = false;
-        let specialTimer = 0;
+        const createScene = function () {
+            const scene = new BABYLON.Scene(engine);
+            scene.enablePhysics(new BABYLON.Vector3(0, -9.81, 0), new BABYLON.CannonJSPlugin());
+            scene.fogMode = BABYLON.Scene.FOGMODE_EXP2;
+            scene.fogColor = new BABYLON.Color3(0.8, 0.9, 1.0);
+            scene.fogDensity = 0.01;
 
-        // --- 3D Scene Setup ---
-        const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x556677, 0.008); 
-        scene.background = new THREE.Color(0x556677); // Dusk sky city silhouette background color
+            // Camera: Setup to follow the skater
+            const camera = new BABYLON.FollowCamera("followCam", new BABYLON.Vector3(0, 5, -10), scene);
+            camera.radius = 8; camera.heightOffset = 4; camera.rotationOffset = 180;
+            camera.cameraAcceleration = 0.05; camera.maxCameraSpeed = 20;
 
-        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: false });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
 
-        // --- Retro Texture Generators ---
-        function createProceduralTexture(col1, col2, size=64, isPlank=false) {
-            const canvas = document.createElement('canvas');
-            canvas.width = size; canvas.height = size;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = col1; ctx.fillRect(0,0,size,size);
-            ctx.fillStyle = col2;
-            if(isPlank) {
-                // Wooden plank layout stripes
-                for(let i=0; i<size; i+=8) {
-                    ctx.fillRect(0, i, size, 1);
-                }
-            } else {
-                ctx.fillRect(0,0,size/2,size/2);
-                ctx.fillRect(size/2,size/2,size/2,size/2);
-            }
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-            tex.magFilter = THREE.NearestFilter;
-            return tex;
-        }
+            // --- Textures ---
+            // Concrete Ground
+            const concreteTex = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/concrete.png", scene);
+            concreteTex.uScale = 20; concreteTex.vScale = 20;
+            const concreteMat = new BABYLON.StandardMaterial("concreteMat", scene);
+            concreteMat.diffuseTexture = concreteTex;
+            concreteMat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 
-        const skateparkGroundTex = createProceduralTexture('#777777', '#6e6e6e', 32);
-        skateparkGroundTex.repeat.set(60,60);
+            // Red Roof Tiles (for outer boundary)
+            const roofTex = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/roof.jpg", scene);
+            roofTex.uScale = 10; roofTex.vScale = 10;
+            const roofMat = new BABYLON.StandardMaterial("roofMat", scene);
+            roofMat.diffuseTexture = roofTex;
 
-        const woodRampTex = createProceduralTexture('#b5835a', '#9c6b43', 64, true);
+            // Green Ramp Material
+            const rampMat = new BABYLON.StandardMaterial("rampMat", scene);
+            rampMat.diffuseColor = new BABYLON.Color3(0.3, 0.5, 0.3);
 
-        // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
-        scene.add(ambientLight);
-        const sunLight = new THREE.DirectionalLight(0xfff5e6, 0.85);
-        sunLight.position.set(60, 80, 30);
-        sunLight.castShadow = true;
-        scene.add(sunLight);
+            // Chain Link Fence
+            const fenceTex = new BABYLON.Texture("https://www.babylonjs-playground.com/textures/player_text.png", scene); // Placeholder for chain link
+            fenceTex.hasAlpha = true;
+            const fenceMat = new BABYLON.StandardMaterial("fenceMat", scene);
+            fenceMat.diffuseTexture = fenceTex;
+            fenceMat.backFaceCulling = false;
 
-        // --- Skatepark Park Perimeter Floor ---
-        const parkFloor = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshLambertMaterial({ map: skateparkGroundTex }));
-        parkFloor.rotation.x = -Math.PI / 2;
-        parkFloor.receiveShadow = true;
-        scene.add(parkFloor);
+            // --- Environment ---
+            const ground = BABYLON.MeshBuilder.CreateGround("ground", {width: 100, height: 100}, scene);
+            ground.material = concreteMat;
+            ground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, friction: 0.5, restitution: 0.1 }, scene);
 
-        // --- Background 3D City Skyline Elements ---
-        const cityGroup = new THREE.Group();
-        for(let i=0; i<45; i++) {
-            const bH = 25 + Math.random() * 65;
-            const bW = 12 + Math.random() * 15;
-            const bGeo = new THREE.BoxGeometry(bW, bH, bW);
-            const bMat = new THREE.MeshLambertMaterial({ color: Math.random() > 0.5 ? 0x222d3d : 0x1c2430 });
-            const building = new THREE.Mesh(bGeo, bMat);
-            
-            // Scatter around outside perimeter map limits
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 210 + Math.random() * 80;
-            building.position.set(Math.cos(angle)*radius, bH/2, Math.sin(angle)*radius);
-            cityGroup.add(building);
-        }
-        scene.add(cityGroup);
+            const building = BABYLON.MeshBuilder.CreateBox("building", {width: 20, height: 15, depth: 40}, scene);
+            building.position = new BABYLON.Vector3(40, 7.5, 0);
+            building.material = roofMat;
+            building.physicsImpostor = new BABYLON.PhysicsImpostor(building, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0 }, scene);
 
-        // --- Big Nick's Skatepark Neon Billboard ---
-        const signGroup = new THREE.Group();
-        signGroup.position.set(0, 22, -80);
-        
-        const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(45, 8, 2), new THREE.MeshLambertMaterial({ color: 0x111111 }));
-        signGroup.add(frameMesh);
+            // Big Nick's Sign
+            const signPlane = BABYLON.MeshBuilder.CreatePlane("sign", {width: 12, height: 4}, scene);
+            signPlane.position = new BABYLON.Vector3(40, 15, -15);
+            signPlane.rotation.y = Math.PI / 2;
+            const signMat = new BABYLON.StandardMaterial("signMat", scene);
+            const dynamicTex = new BABYLON.DynamicTexture("dynamicTex", {width: 512, height: 128}, scene);
+            signMat.diffuseTexture = dynamicTex;
+            dynamicTex.drawText("BIG NICK'S SKATEPARK", 20, 80, "bold 44px Courier New", "blue", "white", true, true);
+            signPlane.material = signMat;
 
-        // Support Pillars
-        const leg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,25), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        leg1.position.set(-15, -10, 0); signGroup.add(leg1);
-        const leg2 = leg1.clone(); leg2.position.x = 15; signGroup.add(leg2);
-
-        // Canvas element write for true text rendering billboard mapping
-        const textCanvas = document.createElement('canvas');
-        textCanvas.width = 512; textCanvas.height = 128;
-        const textCtx = textCanvas.getContext('2d');
-        textCtx.fillStyle = '#111'; textCtx.fillRect(0,0,512,128);
-        textCtx.font = 'bold 36px Courier New';
-        textCtx.fillStyle = '#ff0055'; textCtx.shadowBlur = 15; textCtx.shadowColor = '#ff0055';
-        textCtx.fillText("BIG NICK'S SKATEPARK", 35, 75);
-        
-        const signTex = new THREE.CanvasTexture(textCanvas);
-        const textPlate = new THREE.Mesh(new THREE.PlaneGeometry(43, 6), new THREE.MeshBasicMaterial({ map: signTex }));
-        textPlate.position.z = 1.05;
-        signGroup.add(textPlate);
-        scene.add(signGroup);
-
-        // --- Park Structures Databases ---
-        const obstacles = [];
-        const rails = [];
-
-        function addWoodenKicker(x, z, rotY) {
-            const geom = new THREE.BufferGeometry();
-            const vertices = new Float32Array([
-                -4, 0,  5,   4, 0,  5,   -4, 2.5, -5,  
-                 4, 0,  5,   4, 2.5, -5,   -4, 2.5, -5,  
-                -4, 0,  5,  -4, 2.5, -5,   -4, 0, -5,  
-                 4, 0,  5,   4, 0, -5,    4, 2.5, -5,  
-                -4, 2.5, -5,   4, 2.5, -5,    4, 0, -5
-            ]);
-            geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-            geom.computeVertexNormals();
-            
-            // Build text coordinates to wrap wood pattern neatly
-            const uvs = new Float32Array([
-                0,0, 1,0, 0,1,   1,0, 1,1, 0,1,
-                0,0, 1,1, 0,1,   0,0, 1,0, 1,1,
-                0,1, 1,1, 1,0
-            ]);
-            geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-
-            const mesh = new THREE.Mesh(geom, new THREE.MeshLambertMaterial({ map: woodRampTex }));
-            mesh.position.set(x, 0, z); mesh.rotation.y = rotY;
-            scene.add(mesh);
-            obstacles.push({ mesh: mesh, type: 'ramp', width: 8, depth: 10, height: 2.5 });
-        }
-
-        function addSmoothHalfPipe(x, z, rotY) {
-            const pipeGroup = new THREE.Group();
-            const width = 24, length = 32, maxH = 6.5;
-            const segments = 16;
-            
-            // Generate two side matching quarter pipe ramps facing inward across flat deck bottom gap length
-            for(let i=0; i<=segments; i++) {
-                const zPos = (i / segments) * (length / 2);
-                const normZ = i / segments;
-                const height = Math.pow(normZ, 2.5) * maxH;
-
-                const sliceGeo = new THREE.BoxGeometry(width, height + 0.05, length / segments + 0.1);
-                const sliceMat = new THREE.MeshLambertMaterial({ map: woodRampTex });
-                
-                // Front ramp slice
-                const sliceF = new THREE.Mesh(sliceGeo, sliceMat);
-                sliceF.position.set(0, height/2, length/2 - zPos);
-                pipeGroup.add(sliceF);
-
-                // Inward opposite facing back ramp slice
-                const sliceB = new THREE.Mesh(sliceGeo, sliceMat);
-                sliceB.position.set(0, height/2, -length/2 + zPos);
-                pipeGroup.add(sliceB);
-            }
-
-            pipeGroup.position.set(x, 0, z); pipeGroup.rotation.y = rotY;
-            scene.add(pipeGroup);
-            obstacles.push({ mesh: pipeGroup, type: 'halfpipe', width: width, depth: length, height: maxH });
-        }
-
-        function addIronRail(startX, startZ, endX, endZ) {
-            const start = new THREE.Vector3(startX, 1.0, startZ);
-            const end = new THREE.Vector3(endX, 1.0, endZ);
-            const dist = start.distanceTo(end);
-            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, dist), new THREE.MeshStandardMaterial({ metalness:0.9, roughness:0.1 }));
-            pipe.position.copy(start).add(end).multiplyScalar(0.5);
-            pipe.lookAt(end); pipe.rotation.x += Math.PI/2;
-            scene.add(pipe);
-
-            const stanchion = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1), new THREE.MeshLambertMaterial({ color: 0x222 }));
-            stanchion.position.set(startX, 0.5, startZ); scene.add(stanchion);
-            const stanchion2 = stanchion.clone(); stanchion2.position.set(endX, 0.5, endZ); scene.add(stanchion2);
-
-            rails.push({ start: start, end: end, height: 1.0 });
-        }
-
-        // Assemble park layout
-        addSmoothHalfPipe(0, 0, 0);
-        addWoodenKicker(-25, -35, Math.PI / 4);
-        addWoodenKicker(25, 35, -Math.PI / 1.5);
-        addIronRail(-20, -15, -20, 25);
-        addIronRail(20, -25, 20, 15);
-
-        // --- Compound Player Hierarchical Assembly ---
-        const skaterRoot = new THREE.Group();
-        const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
-
-        const deck = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.1, 3.3), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
-        deck.position.y = 0.25; boardGroup.add(deck);
-
-        const skaterSkeleton = new THREE.Group();
-        skaterSkeleton.position.y = 0.25; skaterRoot.add(skaterSkeleton);
-
-        // Sideways execution stance configuration setup
-        const stanceGroup = new THREE.Group();
-        stanceGroup.rotation.y = Math.PI / 2; // Set rider perpendicular sideways 90 deg matching real stance!
-        skaterSkeleton.add(stanceGroup);
-
-        // Two independent Legs
-        const leftLegRoot = new THREE.Group(); leftLegRoot.position.set(-0.35, 0.1, 0); stanceGroup.add(leftLegRoot);
-        const leftLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), new THREE.MeshLambertMaterial({ color: 0x3a4b5c }));
-        leftLegMesh.position.y = 0.4; leftLegRoot.add(leftLegMesh);
-
-        const rightLegRoot = new THREE.Group(); rightLegRoot.position.set(0.35, 0.1, 0); stanceGroup.add(rightLegRoot);
-        const rightLegMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.8, 0.3), new THREE.MeshLambertMaterial({ color: 0x3a4b5c }));
-        rightLegMesh.position.y = 0.4; rightLegRoot.add(rightLegMesh);
-
-        // Upper Torso/Body
-        const torsoGroup = new THREE.Group(); torsoGroup.position.y = 0.8; stanceGroup.add(torsoGroup);
-        const chest = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.45), new THREE.MeshLambertMaterial({ color: 0xcc3344 }));
-        chest.position.y = 0.55; torsoGroup.add(chest);
-
-        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
-        headMesh.position.y = 1.3; torsoGroup.add(headMesh);
-
-        // Dual Arms Setup Nodes (Clean physics translation hooks)
-        const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.5, 0.9, 0); torsoGroup.add(leftArmRoot);
-        const leftArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
-        leftArmMesh.position.y = -0.45; leftArmRoot.add(leftArmMesh);
-
-        const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.5, 0.9, 0); torsoGroup.add(rightArmRoot);
-        const rightArmMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.9, 0.2), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
-        rightArmMesh.position.y = -0.45; rightArmRoot.add(rightArmMesh);
-
-        skaterRoot.position.set(0, 0, 40);
-        scene.add(skaterRoot);
-
-        // --- Physics Runtime Properties ---
-        let speed = 0; let heading = 0; let yVelocity = 0;
-        let isGrounded = true; let isGrinding = false;
-        let ollieCrouchPrep = false; let crouchFactor = 0;
-        let flipActive = false; let flipProgress = 0;
-
-        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
-        window.addEventListener('keydown', e=>{
-            if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
-            if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
-            if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
-            if(e.key==='d' || e.key==='ArrowRight') keys.d = true;
-            if(e.key===' ') { keys.space = true; if(isGrounded) ollieCrouchPrep = true; }
-            if(e.key==='Shift') keys.shift = true;
-        });
-        window.addEventListener('keyup', e=>{
-            if(e.key==='w' || e.key==='ArrowUp') keys.w = false;
-            if(e.key==='a' || e.key==='ArrowLeft') keys.a = false;
-            if(e.key==='s' || e.key==='ArrowDown') keys.s = false;
-            if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
-            if(e.key===' ') { 
-                keys.space = false; 
-                if(isGrounded && ollieCrouchPrep) {
-                    ollieCrouchPrep = false;
-                    yVelocity = 0.31 + (crouchFactor * 0.1); // Higher velocity pop depending on crouch compress hold!
-                    isGrounded = false; isGrinding = false;
-                    registerTrick("OLLIE", 50);
-                }
-            }
-            if(e.key==='Shift') keys.shift = false;
-        });
-
-        // --- Combo Scoring Utilities ---
-        function registerTrick(name, pts) {
-            if(!activeTricks.includes(name)){
-                activeTricks.push(name);
-                if(currentComboPoints === 0){ currentComboPoints = pts; currentComboMultiplier = 1; }
-                else { currentComboPoints += pts; currentComboMultiplier++; }
-                updateHUD();
-            }
-        }
-        function landCombo() {
-            if(currentComboPoints > 0){
-                totalScore += (currentComboPoints * currentComboMultiplier);
-                if(!isSpecialActive) {
-                    specialMeter = Math.min(100, specialMeter + (currentComboMultiplier * 10));
-                    // Check Special Mode activation trigger condition
-                    if(specialMeter >= 100) {
-                        isSpecialActive = true;
-                        specialTimer = 10.0; // 10 Sec window
-                    }
-                }
-                currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
-                updateHUD();
-            }
-        }
-        function bailCombo() {
-            currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
-            document.getElementById('trick-text').innerText = "WIPEOUT BAIL! +0";
-            setTimeout(()=>{ document.getElementById('trick-text').innerText=""; }, 1200);
-            updateHUD();
-        }
-        function updateHUD() {
-            document.getElementById('score-value').innerText = Math.floor(totalScore).toString().padStart(5,'0');
-            const barFill = document.getElementById('special-bar-fill');
-            barFill.style.width = specialMeter + '%';
-            
-            if(isSpecialActive) {
-                barFill.style.backgroundColor = '#ffcc00'; // Flash gold color
-                document.getElementById('special-text').innerText = `SPECIAL MODE! ${Math.ceil(specialTimer)}s`;
-            } else {
-                barFill.style.backgroundColor = '#0f0';
-                document.getElementById('special-text').innerText = "SPECIAL";
-            }
-
-            if(currentComboPoints > 0){
-                document.getElementById('trick-text').innerText = activeTricks.join(" + ");
-                document.getElementById('combo-score').innerHTML = `${currentComboPoints} <span id="multiplier">X${currentComboMultiplier}</span>`;
-            } else {
-                document.getElementById('combo-score').innerHTML = "";
-            }
-        }
-
-        // --- Core Engine Animation Game Loop ---
-        function animate() {
-            requestAnimationFrame(animate);
-
-            // Handle Global Stage Match Timer Countdown
-            timerSeconds -= (1/60);
-            if(timerSeconds <= 0) { timerSeconds=120; totalScore=0; }
-            document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
-
-            // Handle Special Timer Processing 
-            if(isSpecialActive) {
-                specialTimer -= (1/60);
-                specialMeter = (specialTimer / 10.0) * 100;
-                updateHUD();
-                if(specialTimer <= 0) {
-                    isSpecialActive = false;
-                    specialMeter = 0;
-                    updateHUD();
-                }
-            }
-
-            // Turning steering
-            if (keys.a) heading += 0.045;
-            if (keys.d) heading -= 0.045;
-            skaterRoot.rotation.y = heading;
-
-            // Handle 2x Speed Mode modifier variables logic rules
-            let currentMaxSpeed = isSpecialActive ? 0.78 : 0.38;
-            let currentAccel = isSpecialActive ? 0.09 : 0.05;
-
-            if (keys.w && isGrounded && !ollieCrouchPrep) speed += (currentMaxSpeed - speed) * currentAccel;
-            else if (keys.s && isGrounded) speed += (-0.2 - speed) * 0.08;
-            else if (isGrounded) speed *= 0.96; // Friction decay dampener
-
-            if (!isGrinding) {
-                skaterRoot.position.x += speed * Math.sin(heading);
-                skaterRoot.position.z += speed * Math.cos(heading);
-            }
-
-            // Handle Crouch Compression physics inputs
-            if (ollieCrouchPrep && isGrounded) {
-                crouchFactor = Math.min(0.45, crouchFactor + 0.03);
-                speed *= 0.94; // Decelerate during windup prep
-            } else {
-                crouchFactor = Math.max(0, crouchFactor - 0.05);
-            }
-
-            // Kickflip logic execution
-            if (keys.shift && !isGrounded && !flipActive) {
-                flipActive = true; flipProgress = 0;
-                registerTrick("KICKFLIP", 300);
-            }
-            if (flipActive) {
-                flipProgress += 0.38;
-                boardGroup.rotation.z = flipProgress;
-                if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
-            }
-
-            // --- Realtime Environmental Ramp and Pipe Physics Collision Map ---
-            let currentFloorHeight = 0;
-
-            obstacles.forEach(obs => {
-                let diffX = skaterRoot.position.x - obs.mesh.position.x;
-                let diffZ = skaterRoot.position.z - obs.mesh.position.z;
-
-                // Matrix rotational alignment correction
-                const cos = Math.cos(-obs.mesh.rotation.y);
-                const sin = Math.sin(-obs.mesh.rotation.y);
-                let rotX = diffX * cos - diffZ * sin;
-                let rotZ = diffX * sin + diffZ * cos;
-
-                if (Math.abs(rotX) < obs.width/2 && Math.abs(rotZ) < obs.depth/2) {
-                    if (obs.type === 'ramp') {
-                        let ratio = (obs.depth/2 - rotZ) / obs.depth;
-                        currentFloorHeight = ratio * obs.height;
-                    }
-                    if (obs.type === 'halfpipe') {
-                        // Symmetric curvature map computation equation toward center zero-line axis
-                        let centerRatio = Math.abs(rotZ) / (obs.depth / 2); // 0 at center, 1 at peak coping lips
-                        if (centerRatio > 0.3) {
-                            let curveRatio = (centerRatio - 0.3) / 0.7;
-                            currentFloorHeight = Math.pow(curveRatio, 2.5) * obs.height;
-                        }
-
-                        // Vert Launch velocity engine at apex
-                        if (centerRatio > 0.96 && isGrounded && speed > 0.15) {
-                            isGrounded = false;
-                            yVelocity = speed * (isSpecialActive ? 2.4 : 1.7); // Insane airtime boost during Special Mode
-                            speed *= -0.15; // Reverse trajectory vector back inward down the ramp
-                            heading += Math.PI; // Face opposite turnaround flip spin
-                        }
-                    }
-                }
+            // Fence around perimeter
+            const fencePositions = [
+                {p: [0, 0, 50], r: [0, 0, 0]}, {p: [0, 0, -50], r: [0, 0, 0]},
+                {p: [50, 0, 0], r: [0, Math.PI / 2, 0]}, {p: [-50, 0, 0], r: [0, Math.PI / 2, 0]}
+            ];
+            fencePositions.forEach(pos => {
+                const fence = BABYLON.MeshBuilder.CreatePlane("fence", {width: 100, height: 6}, scene);
+                fence.position = new BABYLON.Vector3(...pos.p); fence.rotation = new BABYLON.Vector3(...pos.r);
+                fence.material = fenceMat;
             });
 
-            // --- Grind Rail Math Capture Logic ---
-            if (!isGrounded && yVelocity <= 0 && !isGrinding) {
-                rails.forEach(rail => {
-                    const pPos = skaterRoot.position;
-                    let crossDist = Math.abs((rail.end.z - rail.start.z)*pPos.x - (rail.end.x - rail.start.x)*pPos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
-                    
-                    if (crossDist < 1.3 && pPos.y >= rail.height - 0.6 && pPos.y <= rail.height + 1.0) {
-                        let borderZMin = Math.min(rail.start.z, rail.end.z) - 1.5;
-                        let borderZMax = Math.max(rail.start.z, rail.end.z) + 1.5;
-                        if(pPos.z >= borderZMin && pPos.z <= borderZMax) {
-                            isGrinding = true; isGrounded = true;
-                            skaterRoot.position.y = rail.height; yVelocity = 0;
-                            heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
-                        }
-                    }
-                });
+            // --- Obstacles ---
+            const createRamp = (name, x, z, ry, sx, sy) => {
+                const ramp = BABYLON.MeshBuilder.CreateBox(name, {width: 4, height: 0.2, depth: 8}, scene);
+                ramp.position = new BABYLON.Vector3(x, 1, z); ramp.rotation.y = ry;
+                ramp.rotation.x = -0.3; // Angle the ramp
+                ramp.scaling = new BABYLON.Vector3(sx, sy, 1);
+                ramp.material = rampMat;
+                ramp.physicsImpostor = new BABYLON.PhysicsImpostor(ramp, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0, friction: 0.1 }, scene);
+            };
+
+            // Various Ramps
+            createRamp("rampLargeL", -20, 20, 0, 2, 1); createRamp("rampLargeR", 20, 20, 0, 2, 1);
+            createRamp("rampSmall1", 0, 30, Math.PI / 4, 1, 0.5); createRamp("rampSmall2", -10, -20, -Math.PI / 3, 1, 0.5);
+
+            // Grinding Obstacles
+            const createLedge = (name, x, z, w) => {
+                const ledge = BABYLON.MeshBuilder.CreateBox(name, {width: w, height: 1, depth: 2}, scene);
+                ledge.position = new BABYLON.Vector3(x, 0.5, z); ledge.material = rampMat;
+                ledge.physicsImpostor = new BABYLON.PhysicsImpostor(ledge, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0 }, scene);
+            };
+            createLedge("ledgeLong", -30, -10, 20); createLedge("ledgeShort", 10, -15, 8);
+
+            const createRail = (name, x, z, ry, length) => {
+                const rail = BABYLON.MeshBuilder.CreateCylinder(name, {diameter: 0.2, height: length}, scene);
+                rail.position = new BABYLON.Vector3(x, 0.6, z); rail.rotation.x = Math.PI / 2; rail.rotation.y = ry;
+                rail.material = concreteMat; // Shiny metal placeholder
+                rail.physicsImpostor = new BABYLON.PhysicsImpostor(rail, BABYLON.PhysicsImpostor.CylinderImpostor, { mass: 0 }, scene);
+            };
+            createRail("rail1", -15, 15, Math.PI / 6, 15); createRail("rail2", 5, 5, -Math.PI / 4, 10);
+
+            // --- Player ---
+            const skaterRoot = new BABYLON.Mesh("skaterRoot", scene);
+            skaterRoot.position.y = 1;
+
+            // Skateboard
+            const board = BABYLON.MeshBuilder.CreateBox("board", {width: 1, height: 0.1, depth: 3}, scene);
+            board.parent = skaterRoot; board.material = rampMat;
+
+            // Wheels (rounded)
+            const wheelMat = new BABYLON.StandardMaterial("wheelMat", scene); wheelMat.diffuseColor = new BABYLON.Color3(0, 1, 0);
+            [[ -0.4, 1.2 ], [ 0.4, 1.2 ], [ -0.4, -1.2 ], [ 0.4, -1.2 ]].forEach(pos => {
+                const wheel = BABYLON.MeshBuilder.CreateCylinder("wheel", {diameter: 0.3, height: 0.2, tessellation: 12}, scene);
+                wheel.parent = board; wheel.position = new BABYLON.Vector3(pos[0], -0.2, pos[1]); wheel.rotation.z = Math.PI / 2;
+                wheel.material = wheelMat;
+            });
+
+            // Character
+            const character = BABYLON.MeshBuilder.CreateBox("char", {width: 0.8, height: 2, depth: 0.5}, scene);
+            character.parent = skaterRoot; character.position.y = 1.1; character.material = rampMat; // Placeholder blue shirt
+            
+            // Baseball Cap
+            const capMat = new BABYLON.StandardMaterial("capMat", scene); capMat.diffuseColor = BABYLON.Color3.White();
+            const cap = BABYLON.MeshBuilder.CreateCylinder("cap", {diameter: 0.6, height: 0.4, tessellation: 16}, scene);
+            cap.parent = character; cap.position.y = 1.1; cap.position.z = -0.1; // Backward
+            cap.material = capMat;
+            
+            // Brown Hair
+            const hairMat = new BABYLON.StandardMaterial("hairMat", scene); hairMat.diffuseColor = new BABYLON.Color3(0.5, 0.3, 0.1);
+            const hair = BABYLON.MeshBuilder.CreateBox("hair", {width: 0.7, height: 0.3, depth: 0.5}, scene);
+            hair.parent = character; hair.position.y = 0.9;
+            hair.material = hairMat;
+
+            skaterRoot.physicsImpostor = new BABYLON.PhysicsImpostor(skaterRoot, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 5, friction: 0.1, restitution: 0.01 }, scene);
+            camera.lockedTarget = skaterRoot;
+
+            // PS1 Post-Processing
+            const pipeline = new BABYLON.DefaultRenderingPipeline("default", true, scene, [camera]);
+            pipeline.fxaaEnabled = false; // Disable smooth edges
+            pipeline.bloomEnabled = false; // Disable modern glow
+            pipeline.chromaticAberrationEnabled = true;
+            pipeline.chromaticAberration.aberrationAmount = 2; // Slight color separation
+            pipeline.grainEnabled = true; pipeline.grain.intensity = 15; // Low res noise
+
+            return scene;
+        };
+
+        const scene = createScene();
+
+        // Game State and Input
+        let inputMap = {};
+        scene.actionManager = new BABYLON.ActionManager(scene);
+        scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyDownTrigger, function (evt) { inputMap[evt.sourceEvent.key] = true; }));
+        scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, function (evt) { inputMap[evt.sourceEvent.key] = false; }));
+
+        let isGrounded = true;
+        let groundRay = new BABYLON.Ray();
+        let rayHelper = new BABYLON.RayHelper(groundRay);
+
+        engine.runRenderLoop(function () {
+            const skaterRoot = scene.getMeshByName("skaterRoot");
+            const speed = 10;
+            const turnSpeed = 2;
+
+            // Basic movement
+            if (inputMap["w"] || inputMap["ArrowUp"]) skaterRoot.physicsImpostor.applyImpulse(skaterRoot.forward.scale(speed), skaterRoot.getAbsolutePosition());
+            if (inputMap["s"] || inputMap["ArrowDown"]) skaterRoot.physicsImpostor.applyImpulse(skaterRoot.forward.scale(-speed), skaterRoot.getAbsolutePosition());
+            if (inputMap["a"] || inputMap["ArrowLeft"]) skaterRoot.rotate(BABYLON.Vector3.Up(), -turnSpeed * engine.getDeltaTime() / 1000, BABYLON.Space.LOCAL);
+            if (inputMap["d"] || inputMap["ArrowRight"]) skaterRoot.rotate(BABYLON.Vector3.Up(), turnSpeed * engine.getDeltaTime() / 1000, BABYLON.Space.LOCAL);
+
+            // Simple ground check for Ollie
+            groundRay.origin = skaterRoot.position.add(new BABYLON.Vector3(0, 0.1, 0));
+            groundRay.direction = new BABYLON.Vector3(0, -1, 0);
+            groundRay.length = 0.5;
+            let hit = scene.pickWithRay(groundRay, function(mesh) { return mesh.name === "ground" || mesh.name.includes("ramp") || mesh.name.includes("ledge"); });
+            isGrounded = hit.hit;
+
+            // Ollie (Spacebar)
+            if ((inputMap[" "] && isGrounded)) {
+                skaterRoot.physicsImpostor.applyImpulse(new BABYLON.Vector3(0, 50, 0), skaterRoot.getAbsolutePosition());
+                score += 50; specialVal = Math.min(100, specialVal + 10);
             }
 
-            if (isGrinding) {
-                registerTrick("50-50 GRIND", 500);
-                currentComboPoints += isSpecialActive ? 8 : 4; 
-                updateHUD();
-
-                let grindSpeed = isSpecialActive ? 0.55 : 0.28;
-                skaterRoot.position.x += grindSpeed * Math.sin(heading);
-                skaterRoot.position.z += grindSpeed * Math.cos(heading);
-
-                let onRailSegment = false;
-                rails.forEach(rail => {
-                    let borderZMin = Math.min(rail.start.z, rail.end.z) - 1.5;
-                    let borderZMax = Math.max(rail.start.z, rail.end.z) + 1.5;
-                    if(skaterRoot.position.z >= borderZMin && skaterRoot.position.z <= borderZMax && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) {
-                        onRailSegment = true;
-                    }
-                });
-
-                if(!onRailSegment || keys.space) {
-                    isGrinding = false; isGrounded = false;
-                    if(keys.space) yVelocity = 0.24; 
-                }
-            }
-
-            // --- Gravity Velocity Resolver ---
-            if (!isGrounded) {
-                yVelocity -= isSpecialActive ? 0.010 : 0.013; // Softened gravity weight for extra height while in Special Mode
-                skaterRoot.position.y += yVelocity;
-
-                if (skaterRoot.position.y <= currentFloorHeight) {
-                    skaterRoot.position.y = currentFloorHeight;
-                    yVelocity = 0; isGrounded = true;
-                    if(flipActive) { bailCombo(); boardGroup.rotation.z = 0; flipActive = false; } 
-                    else { landCombo(); }
-                }
-            } else if (!isGrinding) {
-                skaterRoot.position.y = currentFloorHeight;
-            }
-
-            // --- Skeletal Nodes Pose Matrices Solver (Fixed Shaking) ---
-            // 1. Legs Crouching Compression
-            leftLegRoot.position.y = -crouchFactor * 0.8;
-            rightLegRoot.position.y = -crouchFactor * 0.8;
-            torsoGroup.position.y = 0.8 - (crouchFactor * 1.2);
-
-            // 2. Arms Action Mapping States (Smooth transitions, no shaking)
-            if (isGrinding) {
-                // Wide outward T-Pose balance configuration
-                leftArmRoot.rotation.z = -Math.PI / 2.2;
-                rightArmRoot.rotation.z = Math.PI / 2.2;
-            } else if (ollieCrouchPrep || flipActive) {
-                // Tight tucked downward bend posture profile configuration
-                leftArmRoot.rotation.z = -0.2;
-                rightArmRoot.rotation.z = 0.2;
-                leftArmRoot.rotation.x = 0.4;
-                rightArmRoot.rotation.x = 0.4;
-            } else if (!isGrounded) {
-                // High extension victory launch lift
-                leftArmRoot.rotation.z = -Math.PI + 0.5;
-                rightArmRoot.rotation.z = Math.PI - 0.5;
-                leftArmRoot.rotation.x = 0; rightArmRoot.rotation.x = 0;
+            // HUD and Game Logic
+            scoreBoard.innerText = "SCORE: " + score;
+            specialMeterBar.style.width = specialVal + "%";
+            
+            // Timer
+            timerSeconds -= engine.getDeltaTime() / 1000;
+            if (timerSeconds <= 0) {
+                // Game over logic here
+                timerBoard.innerText = "0:00"; engine.stopRenderLoop(); alert("GAME OVER! Score: " + score);
             } else {
-                // Normal riding: clean casual downward hanging posture with NO jitter
-                leftArmRoot.rotation.z = -0.15;
-                rightArmRoot.rotation.z = 0.15;
-                leftArmRoot.rotation.x = 0;
-                rightArmRoot.rotation.x = 0;
+                let mins = Math.floor(timerSeconds / 60);
+                let secs = Math.floor(timerSeconds % 60);
+                timerBoard.innerText = mins + ":" + secs.toString().padStart(2, '0');
             }
 
-            // --- Third-Person Camera Tracking Follow Engine ---
-            const relativeOffset = new THREE.Vector3(0, 5.5, -11.5);
-            const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
-            camera.position.lerp(worldOffset, 0.12);
-            camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.2, skaterRoot.position.z));
+            // Keep character upright
+            let currentRotation = skaterRoot.rotationQuaternion.toEulerAngles();
+            currentRotation.x = 0; currentRotation.z = 0;
+            skaterRoot.rotationQuaternion = BABYLON.Quaternion.FromEulerVector(currentRotation);
 
-            renderer.render(scene, camera);
-        }
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            scene.render();
         });
 
-        animate();
+        window.addEventListener("resize", function () { engine.resize(); });
     </script>
 </body>
 </html>
