@@ -9,7 +9,7 @@
             margin: 0;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
-            background-color: #334455;
+            background-color: #87CEEB; /* Sunny Sky Blue */
         }
         canvas {
             display: block;
@@ -94,7 +94,7 @@
             position: absolute;
             bottom: 10px;
             right: 10px;
-            color: #ccc;
+            color: #fff;
             font-size: 12px;
             text-align: right;
             text-shadow: 1px 1px #000;
@@ -131,37 +131,117 @@
         let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
 
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x445566, 0.01);
-        scene.background = new THREE.Color(0x445566);
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.005); // Sunny atmosphere fog
+        scene.background = new THREE.Color(0x87CEEB);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- Lights ---
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const sunLight = new THREE.DirectionalLight(0xfff5ee, 0.8);
-        sunLight.position.set(40, 80, 20);
+        // --- Audio Synthesizer Engine (Web Audio API) ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        let grindNoiseNode = null;
+        let grindGainNode = null;
+
+        function playJumpSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(350, audioCtx.currentTime + 0.15);
+            
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+        }
+
+        function playFlipSound() {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.2);
+            
+            gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+            
+            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+        }
+
+        function startGrindSound() {
+            if (grindNoiseNode) return; // Already running
+            
+            // Generate raw procedural friction white noise
+            const bufferSize = audioCtx.sampleRate * 1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            
+            grindNoiseNode = audioCtx.createBufferSource();
+            grindNoiseNode.buffer = buffer;
+            grindNoiseNode.loop = true;
+            
+            // Lowpass filter to make it sound metallic/scratchy rather than pure static hiss
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 600;
+            
+            grindGainNode = audioCtx.createGain();
+            grindGainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            
+            grindNoiseNode.connect(filter);
+            filter.connect(grindGainNode);
+            grindGainNode.connect(audioCtx.destination);
+            
+            grindNoiseNode.start();
+        }
+
+        function stopGrindSound() {
+            if (grindNoiseNode) {
+                grindNoiseNode.stop();
+                grindNoiseNode.disconnect();
+                grindGainNode.disconnect();
+                grindNoiseNode = null;
+                grindGainNode = null;
+            }
+        }
+
+        // --- Lights & Sun ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 0.9);
+        sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
+
+        // Visual Sun Sphere in Sky
+        const sunGeo = new THREE.SphereGeometry(6, 16, 16);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
+        const sunVisual = new THREE.Mesh(sunGeo, sunMat);
+        sunVisual.position.set(120, 180, 80);
+        scene.add(sunVisual);
 
         // --- Procedural Canvas Textures (Safe from CORS!) ---
         function generateConcreteTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#999999'; ctx.fillRect(0,0,128,128);
-            // Add concrete speckles
-            ctx.fillStyle = '#888888';
-            for(let i=0; i<300; i++) {
-                ctx.fillRect(Math.random()*128, Math.random()*128, 2, 2);
+            ctx.fillStyle = '#b0b0b0'; ctx.fillRect(0,0,128,128); // Concrete gray lighter tone
+            ctx.fillStyle = '#9c9c9c';
+            for(let i=0; i<400; i++) {
+                ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
             }
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
             tex.repeat.set(50, 50);
-            tex.magFilter = THREE.NearestFilter;
             return tex;
         }
 
@@ -170,7 +250,7 @@
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
             ctx.fillStyle = '#cc9966'; ctx.fillRect(0,0,64,64);
-            ctx.fillStyle = '#b3804d'; // Wood grain lines
+            ctx.fillStyle = '#b3804d';
             for(let i=0; i<64; i+=8) ctx.fillRect(0, i, 64, 2);
             const tex = new THREE.CanvasTexture(canvas);
             tex.magFilter = THREE.NearestFilter;
@@ -179,7 +259,7 @@
 
         const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateConcreteTexture() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
-        const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.9, roughness: 0.1 });
+        const railMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 });
 
         // --- Ground & Fencing ---
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
@@ -191,15 +271,13 @@
         const fenceGroup = new THREE.Group();
         function createFenceWall(w, h, x, z, rotY) {
             const wall = new THREE.Group();
-            // Fence mesh placeholder layout
             const wireGeo = new THREE.PlaneGeometry(w, h);
-            const wireMat = new THREE.MeshBasicMaterial({ color: 0x8899aa, wireframe: true, transparent: true, opacity: 0.4 });
+            const wireMat = new THREE.MeshBasicMaterial({ color: 0x778899, wireframe: true, transparent: true, opacity: 0.25 });
             const mesh = new THREE.Mesh(wireGeo, wireMat);
             mesh.position.y = h/2;
             wall.add(mesh);
-            // Posts
             for(let i = -w/2; i <= w/2; i += 15) {
-                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, h), new THREE.MeshLambertMaterial({ color: 0x778899 }));
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, h), new THREE.MeshLambertMaterial({ color: 0x667788 }));
                 post.position.set(i, h/2, 0);
                 wall.add(post);
             }
@@ -207,32 +285,30 @@
             wall.rotation.y = rotY;
             fenceGroup.add(wall);
         }
-        createFenceWall(240, 8, 0, 120, 0);
-        createFenceWall(240, 8, 0, -120, 0);
-        createFenceWall(240, 8, 120, 0, Math.PI/2);
-        createFenceWall(240, 8, -120, 0, Math.PI/2);
+        createFenceWall(240, 8, 0, 120, 0); createFenceWall(240, 8, 0, -120, 0);
+        createFenceWall(240, 8, 120, 0, Math.PI/2); createFenceWall(240, 8, -120, 0, Math.PI/2);
         scene.add(fenceGroup);
 
-        // --- Big Nick's Sign ---
+        // --- Big Nick's Sign (White with Bold Blue Letters) ---
         const signGroup = new THREE.Group();
-        signGroup.position.set(0, 18, -100);
-        const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(50, 10, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+        signGroup.position.set(0, 20, -105);
+        const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(54, 11, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
         signGroup.add(boardMesh);
 
         const signCanvas = document.createElement('canvas');
         signCanvas.width = 512; signCanvas.height = 128;
         const sCtx = signCanvas.getContext('2d');
         sCtx.fillStyle = '#ffffff'; sCtx.fillRect(0,0,512,128);
-        sCtx.font = 'bold 38px Arial'; sCtx.fillStyle = '#0044cc'; sCtx.textAlign = 'center';
+        sCtx.font = 'bold 42px Arial'; sCtx.fillStyle = '#0044cc'; sCtx.textAlign = 'center';
         sCtx.fillText("BIG NICK'S SKATEPARK", 256, 75);
         const signTex = new THREE.CanvasTexture(signCanvas);
-        const signPlate = new THREE.Mesh(new THREE.PlaneGeometry(48, 8), new THREE.MeshBasicMaterial({ map: signTex }));
+        const signPlate = new THREE.Mesh(new THREE.PlaneGeometry(52, 9), new THREE.MeshBasicMaterial({ map: signTex }));
         signPlate.position.z = 0.6;
         signGroup.add(signPlate);
         
-        const signPost1 = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 20), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        signPost1.position.set(-18, -10, 0); signGroup.add(signPost1);
-        const signPost2 = signPost1.clone(); signPost2.position.x = 18; signGroup.add(signPost2);
+        const signPost1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 24), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+        signPost1.position.set(-20, -12, 0); signGroup.add(signPost1);
+        const signPost2 = signPost1.clone(); signPost2.position.x = 20; signGroup.add(signPost2);
         scene.add(signGroup);
 
         // --- Obstacles Array Builder ---
@@ -285,42 +361,52 @@
             rails.push({ start: start, end: end, height: h });
         }
 
-        // --- Build Out The Massive New Park Grid ---
-        addRamp(12, 4.0, 14, 0, -30, 0);         // Large Central Ramp
-        addRamp(10, 2.5, 10, -35, 20, Math.PI/4); // Medium Left Corner Ramp
-        addRamp(8, 1.8, 8, 40, -40, -Math.PI/2);  // Small Side Launch Ramp
-        addRamp(14, 3.5, 12, -50, -50, 0);        // Wide Back Left Ramp
+        // --- Build Out Independent Park Layout (No connections or clipping) ---
+        // Massive Mega Ramps
+        addRamp(20, 6.5, 22, 0, -40, 0);          // HUGE Center-Back Mega Launch
+        addRamp(18, 5.0, 18, -65, -30, Math.PI/3); // Heavy Left Mega Box
 
-        addGrindLedge(16, 1.2, 3, 30, 10, 0);     // Ledge 1
-        addGrindLedge(20, 1.5, 4, -25, -10, Math.PI/3); // Angled Ledge 2
+        // Medium & Small Ramps
+        addRamp(12, 3.0, 12, 60, -40, -Math.PI/2); 
+        addRamp(10, 2.2, 10, -45, 45, Math.PI/4);
+        addRamp(12, 2.5, 12, 45, 50, 0);
 
-        addRail(-15, -60, -15, -10, 1.1);         // Long Straight Rail
-        addRail(20, -10, 45, 15, 1.0);            // Diagonal Rail Right
-        addRail(-40, 50, -10, 50, 0.9);           // Front Cross Rail
+        // Distinct Grind Ledges (Away from ramps)
+        addGrindLedge(16, 1.2, 3, 35, 0, 0);     
+        addGrindLedge(20, 1.5, 4, -20, 0, Math.PI/4); 
+        addGrindLedge(14, 1.0, 3, 0, 30, Math.PI/2);
+
+        // Independent Rails (Clear paths)
+        addRail(-30, -75, -30, -35, 1.1);         
+        addRail(35, -25, 60, -5, 1.0);            
+        addRail(-25, 75, 15, 75, 0.95);           
+        addRail(25, 20, 25, 60, 1.0);
 
         // --- Skater Character Compounding Assembly ---
         const skaterRoot = new THREE.Group();
         const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
 
-        // Skateboard with rounded wheel mechanics setup
-        const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 3.4), new THREE.MeshLambertMaterial({ color: 0x222222 }));
-        deckMesh.position.y = 0.3; boardGroup.add(deckMesh);
+        // Skateboard Deck with Adjusted Height Profile (Wheels completely under board)
+        const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 3.4), new THREE.MeshLambertMaterial({ color: 0x1d1d1d }));
+        deckMesh.position.y = 0.5; // Raised deck up to fully clear wheel tops
+        boardGroup.add(deckMesh);
         
-        const wheelGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.2, 16);
-        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
-        const wOffset = [[-0.45, 1.1], [0.45, 1.1], [-0.45, -1.1], [0.45, -1.1]];
+        const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.2, 16);
+        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
+        const wOffset = [[-0.45, 1.0], [0.45, 1.0], [-0.45, -1.0], [0.45, -1.0]];
         wOffset.forEach(pos => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-            wheel.position.set(pos[0], 0.15, pos[1]); wheel.rotation.z = Math.PI/2;
+            // Lowered wheels securely to eliminate clipping visuals through top deck face
+            wheel.position.set(pos[0], 0.24, pos[1]); wheel.rotation.z = Math.PI/2;
             boardGroup.add(wheel);
         });
 
         // Skater Skeleton Node Tree (locked sideways perpendicular posture)
         const skaterSkeleton = new THREE.Group();
-        skaterSkeleton.position.y = 0.3; skaterRoot.add(skaterSkeleton);
+        skaterSkeleton.position.y = 0.5; skaterRoot.add(skaterSkeleton);
 
         const stanceGroup = new THREE.Group();
-        stanceGroup.rotation.y = Math.PI / 2; // Locked perpendicular to the deck path
+        stanceGroup.rotation.y = Math.PI / 2; // Locked perpendicular
         skaterSkeleton.add(stanceGroup);
 
         // Two Legs
@@ -336,16 +422,12 @@
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
         head.position.y = 1.3; torsoGroup.add(head);
 
-        // Brown Hair Asset addition
-        const hairMesh = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.18, 0.44), new THREE.MeshLambertMaterial({ color: 0x5c4033 }));
-        hairMesh.position.set(0, 1.45, -0.02); torsoGroup.add(hairMesh);
-
-        // White Baseball Cap with Blue Brim Asset addition
+        // NO HAIR - Swapped directly into a Pure Black Backward Facing Cap
         const capGroup = new THREE.Group(); capGroup.position.set(0, 1.5, 0);
-        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), new THREE.MeshLambertMaterial({ color: 0xffffff }));
+        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); // Black cap dome
         capGroup.add(capDome);
-        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.04, 0.25), new THREE.MeshLambertMaterial({ color: 0x0044cc }));
-        capBrim.position.set(0, -0.05, -0.25); // Facing Backward relative to character's side stance view
+        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.26), new THREE.MeshLambertMaterial({ color: 0x111111 })); // Black brim
+        capBrim.position.set(0, -0.05, -0.25); // Backward facing brim
         capGroup.add(capBrim);
         torsoGroup.add(capGroup);
 
@@ -367,6 +449,9 @@
 
         const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
         window.addEventListener('keydown', e => {
+            // Unlock audio context context tracking rules for browser safety security layers
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            
             if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
             if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
             if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
@@ -383,8 +468,9 @@
                 keys.space = false;
                 if(isGrounded && ollieHold) {
                     ollieHold = false;
-                    yVelocity = 0.30 + (crouchAmt * 0.12);
+                    yVelocity = 0.31 + (crouchAmt * 0.14); // Higher pop
                     isGrounded = false; isGrinding = false;
+                    playJumpSound(); // Play Audio
                     registerTrick("OLLIE", 50);
                 }
             }
@@ -454,7 +540,7 @@
             if (keys.d) heading -= 0.045;
             skaterRoot.rotation.y = heading;
 
-            let maxSpd = isSpecialActive ? 0.80 : 0.38;
+            let maxSpd = isSpecialActive ? 0.85 : 0.40; // Slightly higher speeds on massive ramps
             let acc = isSpecialActive ? 0.08 : 0.05;
 
             if (keys.w && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
@@ -471,20 +557,23 @@
             else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
 
             // Kickflip action processing
-            if (keys.shift && !isGrounded && !flipActive) { flipActive = true; flipProgress = 0; registerTrick("KICKFLIP", 300); }
+            if (keys.shift && !isGrounded && !flipActive) { 
+                flipActive = true; flipProgress = 0; 
+                playFlipSound(); // Play Audio
+                registerTrick("KICKFLIP", 300); 
+            }
             if (flipActive) {
                 flipProgress += 0.35; boardGroup.rotation.z = flipProgress;
                 if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
             }
 
-            // --- Absolute Native Math Collision Solvers (No falling through floors!) ---
+            // --- Math Collision Solvers ---
             let groundHeight = 0;
 
             obstacles.forEach(obs => {
                 let dx = skaterRoot.position.x - obs.x;
                 let dz = skaterRoot.position.z - obs.z;
 
-                // Inverse matrix rotational adjustment formula
                 let cos = Math.cos(-obs.rotY); let sin = Math.sin(-obs.rotY);
                 let rx = dx * cos - dz * sin;
                 let rz = dx * sin + dz * cos;
@@ -501,7 +590,7 @@
                 }
             });
 
-            // Boundary map containment lock rails clamping domain
+            // Boundary limits
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
@@ -520,6 +609,7 @@
                             isGrinding = true; isGrounded = true;
                             skaterRoot.position.y = rail.height; yVelocity = 0;
                             heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
+                            startGrindSound(); // Play Audio loop
                         }
                     }
                 });
@@ -540,6 +630,7 @@
 
                 if(!verifiedOnRail || keys.space) {
                     isGrinding = false; isGrounded = false;
+                    stopGrindSound(); // Stop Audio loop
                     if(keys.space) yVelocity = 0.24;
                 }
             }
@@ -559,7 +650,7 @@
                 skaterRoot.position.y = groundHeight;
             }
 
-            // --- Bone Node Frame Animations ---
+            // --- Bone Node Animations ---
             leftLeg.position.y = 0.4 - (crouchAmt * 0.7);
             rightLeg.position.y = 0.4 - (crouchAmt * 0.7);
             torsoGroup.position.y = 0.8 - (crouchAmt * 1.1);
