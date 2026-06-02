@@ -151,7 +151,7 @@
             document.querySelectorAll('.mobile-btn').forEach(el => el.style.display = 'flex');
         }
 
-        // --- Game Variables ---
+        // --- Game Setup Variables ---
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
         let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
 
@@ -165,7 +165,7 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- Audio Synthesizer ---
+        // --- Audio Engine ---
         let audioCtx = null;
         let grindNoiseNode = null;
         let grindGainNode = null;
@@ -232,25 +232,19 @@
             }
         }
 
-        // --- Lights & Sun ---
+        // --- Lights ---
         scene.add(new THREE.AmbientLight(0xffffff, 0.75));
         const sunLight = new THREE.DirectionalLight(0xfffaed, 0.85);
         sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
 
-        const sunGeo = new THREE.SphereGeometry(6, 16, 16);
-        const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
-        const sunVisual = new THREE.Mesh(sunGeo, sunMat);
-        sunVisual.position.set(120, 180, 80);
-        scene.add(sunVisual);
-
-        // --- Dark Gray Concrete & Wood Textures ---
+        // --- Environmental Textures ---
         function generateDarkConcrete() {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#3c3c3c'; ctx.fillRect(0,0,128,128); // Gritty dark gray floor
+            ctx.fillStyle = '#3c3c3c'; ctx.fillRect(0,0,128,128);
             ctx.fillStyle = '#2b2b2b';
             for(let i=0; i<500; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
             const tex = new THREE.CanvasTexture(canvas);
@@ -263,7 +257,7 @@
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#513829'; ctx.fillRect(0,0,64,64); // Rich brown fence panels
+            ctx.fillStyle = '#513829'; ctx.fillRect(0,0,64,64);
             ctx.fillStyle = '#3d2a1e';
             for(let i=0; i<64; i+=16) ctx.fillRect(i, 0, 2, 64);
             return new THREE.CanvasTexture(canvas);
@@ -284,13 +278,13 @@
         const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture() });
         const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
 
-        // Ground
+        // Ground Mesh
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // --- Perimeter Wooden Fence ---
+        // Perimeter Wooden Fence
         const fenceGroup = new THREE.Group();
         function createWoodFence(w, h, x, z, rotY) {
             const wall = new THREE.Group();
@@ -310,30 +304,27 @@
         createWoodFence(240, 5.5, 120, 0, Math.PI/2); createWoodFence(240, 5.5, -120, 0, Math.PI/2);
         scene.add(fenceGroup);
 
-        // --- Background Houses ---
+        // Background Neighborhood Houses
         function addBackgroundHouses() {
             const houseColors = [0xaa4433, 0x4466aa, 0x558855, 0xddaa44, 0x887766];
-            for (let i = 0; i < 18; i++) {
+            for (let i = 0; i < 20; i++) {
                 const house = new THREE.Group();
                 const w = 12 + Math.random() * 8;
-                const h = 8 + Math.random() * 6;
+                const h = 8 + Math.random() * 5;
                 const d = 12 + Math.random() * 6;
                 
-                // Base structure
                 const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: houseColors[Math.floor(Math.random() * houseColors.length)] }));
                 base.position.y = h/2;
                 house.add(base);
                 
-                // Roof
                 const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.75, 4, 4), new THREE.MeshLambertMaterial({ color: 0x333333 }));
                 roof.position.y = h + 2;
                 roof.rotation.y = Math.PI/4;
                 house.add(roof);
 
-                // Position randomly outside the boundary fence lines
                 let side = Math.floor(Math.random() * 4);
-                let dist = 135 + Math.random() * 25;
-                let spread = (Math.random() - 0.5) * 200;
+                let dist = 135 + Math.random() * 20;
+                let spread = (Math.random() - 0.5) * 220;
                 if (side === 0) house.position.set(spread, 0, dist);
                 else if (side === 1) house.position.set(spread, 0, -dist);
                 else if (side === 2) house.position.set(dist, 0, spread);
@@ -344,15 +335,14 @@
         }
         addBackgroundHouses();
 
-        // --- Obstacles Global Arrays ---
+        // --- Obstacles Logic ---
         const obstacles = [];
         const rails = [];
 
-        function addSteepMegaRamp(w, h, d, x, z, rotY) {
+        function addRamp(w, h, d, x, z, rotY) {
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
             
-            // Adjusted vertex structure for smooth transition physics
             const vertices = new Float32Array([
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
                  w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
@@ -374,60 +364,59 @@
             obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY });
         }
 
-        function addHorizontalRail(startX, startZ, endX, endZ, h=1.1) {
+        function addHorizontalRail(startX, startZ, endX, endZ, h=1.2) {
             const start = new THREE.Vector3(startX, h, startZ);
             const end = new THREE.Vector3(endX, h, endZ);
             const distance = start.distanceTo(end);
             
-            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, distance), railMaterial);
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, distance), railMaterial);
             pipe.position.copy(start).add(end).multiplyScalar(0.5);
             pipe.lookAt(end); pipe.rotation.x += Math.PI / 2;
             scene.add(pipe);
 
-            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, h), railMaterial); p1.position.set(startX, h/2, startZ); scene.add(p1);
+            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, h), railMaterial); p1.position.set(startX, h/2, startZ); scene.add(p1);
             const p2 = p1.clone(); p2.position.set(endX, h/2, endZ); scene.add(p2);
             rails.push({ start: start, end: end, height: h });
         }
 
-        // --- Park Layout (Steep Mega Ramps & Strictly Horizontal Rails Only) ---
-        addSteepMegaRamp(24, 8.0, 16, 0, -55, 0);            // North Steep Launch
-        addSteepMegaRamp(22, 7.0, 14, -65, -25, Math.PI/2.5);  // West Steep Launch
-        addSteepMegaRamp(22, 7.0, 14, 65, -25, -Math.PI/2.5); // East Steep Launch
-        addSteepMegaRamp(24, 8.0, 16, 0, 55, Math.PI);        // South Steep Launch
+        // --- Layout Design: Exactly 6 Ramps & 2 Massive Side Rails ---
+        // 2 Very Large Ramps
+        addRamp(24, 8.5, 16, 0, -65, 0);       
+        addRamp(24, 8.5, 16, 0, 65, Math.PI);  
 
-        addHorizontalRail(-35, 20, -10, 20, 1.1);
-        addHorizontalRail(10, 20, 35, 20, 1.1);
-        addHorizontalRail(-35, -20, -10, -20, 1.1);
-        addHorizontalRail(10, -20, 35, -20, 1.1);
+        // 2 Medium Ramps
+        addRamp(18, 5.0, 12, -60, 0, Math.PI / 2);
+        addRamp(18, 5.0, 12, 60, 0, -Math.PI / 2);
 
-        // --- Skater & Compact Rounded Skateboard Setup ---
+        // 2 Small Ramps
+        addRamp(14, 2.5, 8, -25, -35, Math.PI / 4);
+        addRamp(14, 2.5, 8, 25, 35, -Math.PI * 0.75);
+
+        // 2 Big Side Rails
+        addHorizontalRail(-80, -40, -80, 40, 1.3); // Massive Left Rail
+        addHorizontalRail(80, -40, 80, 40, 1.3);   // Massive Right Rail
+
+        // --- Hero Skater & Reverted Standard Flat Edge Skateboard ---
         const skaterRoot = new THREE.Group();
         const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
 
-        // Rebuilt Compact Oval Deck (Smaller proportions, rounded capsule caps)
-        const deckCenter = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.10, 1.6), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
-        deckCenter.position.y = 0.44; boardGroup.add(deckCenter);
-
-        const roundEdgeGeo = new THREE.CylinderGeometry(0.425, 0.425, 0.10, 14, 1, false, 0, Math.PI);
-        const noseCap = new THREE.Mesh(roundEdgeGeo, new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
-        noseCap.position.set(0, 0.44, 0.8); noseCap.rotation.x = Math.PI/2; noseCap.rotation.z = Math.PI;
-        boardGroup.add(noseCap);
-
-        const tailCap = noseCap.clone(); tailCap.position.z = -0.8; tailCap.rotation.z = 0;
-        boardGroup.add(tailCap);
+        // REVERTED: Clean Flat-Edge Rectangle Skateboard Deck
+        const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.10, 2.3), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+        deckMesh.position.y = 0.38; 
+        boardGroup.add(deckMesh);
         
-        // Compact low-profile wheels hidden safely under deck rim
+        // Compact low-profile wheels setup under deck
         const wheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 12);
         const wheelMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
-        const wOffset = [[-0.32, 0.6], [0.32, 0.6], [-0.32, -0.6], [0.32, -0.6]];
+        const wOffset = [[-0.34, 0.75], [0.34, 0.75], [-0.34, -0.75], [0.34, -0.75]];
         wOffset.forEach(pos => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
             wheel.position.set(pos[0], 0.18, pos[1]); wheel.rotation.z = Math.PI/2;
             boardGroup.add(wheel);
         });
 
-        // Skater Rigging (Sideways stance)
-        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.44; skaterRoot.add(skaterSkeleton);
+        // Player Rigging Stance Structure
+        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.38; skaterRoot.add(skaterSkeleton);
         const stanceGroup = new THREE.Group(); stanceGroup.rotation.y = Math.PI / 2; skaterSkeleton.add(stanceGroup);
 
         const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
@@ -438,55 +427,68 @@
         const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.36), new THREE.MeshLambertMaterial({ color: 0xdd3333 })); shirt.position.y = 0.5; torsoGroup.add(shirt);
         const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); head.position.y = 1.18; torsoGroup.add(head);
 
-        // BALD HEAD + SIGNIFICANTLY BIGGER BLACK CAP ASSET
-        const capGroup = new THREE.Group(); capGroup.position.set(0, 1.34, 0.05);
-        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); capGroup.add(capDome);
-        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.05, 0.32), new THREE.MeshLambertMaterial({ color: 0x111111 })); capBrim.position.set(0, -0.05, -0.32); capGroup.add(capBrim);
-        torsoGroup.add(capGroup);
+        // VOLUMETRIC BROWN AFRO HAIR ASSET (REMOVED HAT)
+        const afroGroup = new THREE.Group(); afroGroup.position.set(0, 1.34, 0);
+        const afroCenter = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), new THREE.MeshLambertMaterial({ color: 0x5a3d28 }));
+        afroGroup.add(afroCenter);
+        // Add extra fluffy dimension textures to the afro geometry outline
+        const puffOffsets = [[0.12,0.1,0], [-0.12,0.1,0], [0,0.12,0.1], [0,0.12,-0.1], [0.1,-0.1,0.1]];
+        puffOffsets.forEach(o => {
+            const puff = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshLambertMaterial({ color: 0x5a3d28 }));
+            puff.position.set(o[0], o[1], o[2]);
+            afroGroup.add(puff);
+        });
+        torsoGroup.add(afroGroup);
 
         const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.45, 0.85, 0); torsoGroup.add(leftArmRoot);
         const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); leftArm.position.y = -0.35; leftArmRoot.add(leftArm);
         const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.45, 0.85, 0); torsoGroup.add(rightArmRoot);
         const rightArm = leftArm.clone(); rightArm.position.y = -0.35; rightArmRoot.add(rightArm);
 
-        skaterRoot.position.set(0, 0, 70);
+        skaterRoot.position.set(0, 0, 40);
         scene.add(skaterRoot);
 
-        // --- Living World Elements (Skaters, Walkers, Dogs NPCs) ---
+        // --- Humanized Skater NPCs (Exactly 4 Full Human Skeletal Models) ---
         const npcs = [];
-        const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933, 0x9966ff];
+        const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933];
 
-        function spawnNPCs() {
-            // Other Skaters
+        function spawnSkaterNPCs() {
             for (let i = 0; i < 4; i++) {
-                const group = new THREE.Group();
-                const b = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 1.8), new THREE.MeshLambertMaterial({ color: 0x333333 })); b.position.y = 0.1; group.add(b);
-                const t = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.4), new THREE.MeshLambertMaterial({ color: npcColors[i] })); t.position.y = 0.8; group.add(t);
-                group.position.set((Math.random() - 0.5) * 140, 0, (Math.random() - 0.5) * 140);
-                scene.add(group);
-                npcs.push({ mesh: group, type: 'skater', speed: 0.15 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
-            }
-            // Pedestrians
-            for (let i = 0; i < 5; i++) {
-                const group = new THREE.Group();
-                const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xeeeeee })); body.position.y = 0.7; group.add(body);
-                group.position.set((Math.random() - 0.5) * 160, 0, (Math.random() - 0.5) * 160);
-                scene.add(group);
-                npcs.push({ mesh: group, type: 'walker', speed: 0.04 + Math.random() * 0.03, angle: Math.random() * Math.PI * 2 });
-            }
-            // Running Dogs
-            for (let i = 0; i < 3; i++) {
-                const group = new THREE.Group();
-                const dBody = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.9), new THREE.MeshLambertMaterial({ color: 0xa67c52 })); dBody.position.y = 0.3; group.add(dBody);
-                const dHead = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshLambertMaterial({ color: 0xa67c52 })); dHead.position.set(0, 0.5, 0.4); group.add(dHead);
-                group.position.set((Math.random() - 0.5) * 120, 0, (Math.random() - 0.5) * 120);
-                scene.add(group);
-                npcs.push({ mesh: group, type: 'dog', speed: 0.2 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
+                const npcSkater = new THREE.Group();
+                
+                // Full Deck Assembly
+                const nDeck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 2.2), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+                nDeck.position.y = 0.2; npcSkater.add(nDeck);
+                
+                // Human Pose Skeleton Nodes Map
+                const nStance = new THREE.Group();
+                nStance.rotation.y = Math.PI / 2;
+                nStance.position.y = 0.2;
+                npcSkater.add(nStance);
+
+                const nLegL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+                nLegL.position.set(-0.3, 0.35, 0); nStance.add(nLegL);
+                const nLegR = nLegL.clone(); nLegR.position.x = 0.3; nStance.add(nLegR);
+
+                const nTorso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.35), new THREE.MeshLambertMaterial({ color: npcColors[i] }));
+                nTorso.position.y = 1.1; nStance.add(nTorso);
+
+                const nHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
+                nHead.position.y = 1.7; nStance.add(nHead);
+
+                // Distinctive hair sets to separate visual profiles
+                const nHair = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+                nHair.position.set(0, 1.8, -0.05); nStance.add(nHair);
+
+                npcSkater.position.set((Math.random() - 0.5) * 130, 0, (Math.random() - 0.5) * 130);
+                scene.add(npcSkater);
+                
+                npcs.push({ mesh: npcSkater, speed: 0.14 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
             }
         }
-        spawnNPCs();
+        spawnSkaterNPCs();
 
-        // --- Input Engine Matrix ---
+        // --- Controls Handling Engine ---
         let speed = 0, heading = 0, yVelocity = 0;
         let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
         let flipActive = false, flipProgress = 0, touchSteerDirection = 0;
@@ -511,7 +513,7 @@
             if(e.key==='Shift') keys.shift = false;
         });
 
-        // Touch Hooks
+        // Mobile Screen Overlay Mapping Listeners
         const joyZone = document.getElementById('joystick-zone');
         joyZone.addEventListener('touchstart', e => {
             initAudio();
@@ -583,7 +585,7 @@
             }
         }
 
-        // --- Game Loops Engine ---
+        // --- Main Simulation Run Loops ---
         function animate() {
             requestAnimationFrame(animate);
 
@@ -607,7 +609,7 @@
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
             let nextZ = skaterRoot.position.z + speed * Math.cos(heading);
 
-            // --- Fixed Up-Ramp Height Physics + Solid Wall Collisions ---
+            // --- Elevation Slope Calculations & Solid Barrier Checks ---
             let groundHeight = 0;
             let hitBarrier = false;
 
@@ -618,14 +620,11 @@
                 let rx = dx * cos - dz * sin;
                 let rz = dx * sin + dz * cos;
 
-                // Precision check boundaries
                 if (Math.abs(rx) < (obs.w/2) && Math.abs(rz) < (obs.d/2)) {
-                    // Check if arriving from flat front opening vs running straight through wall side guards
                     let approachRatio = (obs.d/2 - rz) / obs.d; 
                     if(approachRatio >= 0.0 && approachRatio <= 1.0) {
                         let calculateSlopeHeight = approachRatio * obs.h;
-                        // Smoothly scale climb threshold, otherwise block movement execution
-                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.4) {
+                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.5) {
                             groundHeight = calculateSlopeHeight;
                         } else {
                             hitBarrier = true;
@@ -640,10 +639,10 @@
                 skaterRoot.position.x = nextX;
                 skaterRoot.position.z = nextZ;
             } else if (hitBarrier) {
-                speed *= -0.35; // Deflect
+                speed *= -0.35;
             }
 
-            // Boundary checks
+            // Boundary limits
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
@@ -658,12 +657,12 @@
             if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
             else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
 
-            // --- Rail Processing ---
+            // --- Rail Grinding Math Engine ---
             if (!isGrounded && yVelocity <= 0 && !isGrinding) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
                     let cross = Math.abs((rail.end.z - rail.start.z)*pos.x - (rail.end.x - rail.start.x)*pos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
-                    if (cross < 1.1 && pos.y >= rail.height - 0.5 && pos.y <= rail.height + 0.8) {
+                    if (cross < 1.2 && pos.y >= rail.height - 0.5 && pos.y <= rail.height + 0.8) {
                         if(pos.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && pos.z <= Math.max(rail.start.z, rail.end.z) + 1.0) {
                             isGrinding = true; isGrounded = true;
                             skaterRoot.position.y = rail.height; yVelocity = 0;
@@ -676,12 +675,12 @@
 
             if (isGrinding) {
                 registerTrick("50-50 GRIND", 400); currentComboPoints += 4; updateHUD();
-                skaterRoot.position.x += 0.30 * Math.sin(heading);
-                skaterRoot.position.z += 0.30 * Math.cos(heading);
+                skaterRoot.position.x += 0.32 * Math.sin(heading);
+                skaterRoot.position.z += 0.32 * Math.cos(heading);
                 
                 let stillOn = false;
                 rails.forEach(rail => {
-                    if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.0) stillOn = true;
+                    if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) stillOn = true;
                 });
                 if(!stillOn || keys.space) {
                     isGrinding = false; isGrounded = false; stopGrindSound();
@@ -702,12 +701,14 @@
                 skaterRoot.position.y = groundHeight;
             }
 
-            // NPC Cycle Loop Movements
+            // Other Skaters AI Cycles Run Tracking
             npcs.forEach(npc => {
                 npc.mesh.position.x += npc.speed * Math.sin(npc.angle);
                 npc.mesh.position.z += npc.speed * Math.cos(npc.angle);
-                if(Math.abs(npc.mesh.position.x) > 115 || Math.abs(npc.mesh.position.z) > 115) {
-                    npc.angle += Math.PI; // Bounce turn back internally inside courtyard map parameters
+                npc.mesh.rotation.y = npc.angle;
+                // Bounce loop internally away from outer fencing boundary lines
+                if(Math.abs(npc.mesh.position.x) > 114 || Math.abs(npc.mesh.position.z) > 114) {
+                    npc.angle += Math.PI * (0.5 + Math.random() * 0.5);
                 }
             });
 
@@ -716,7 +717,7 @@
             rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
             torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
 
-            // Camera Track calculations
+            // Camera Tracking Follow Lerp Target Calculations
             const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
