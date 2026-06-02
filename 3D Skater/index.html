@@ -2,14 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Big Nick's Skatepark</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             font-family: 'Courier New', Courier, monospace;
-            background-color: #87CEEB; /* Sunny Sky Blue */
+            background-color: #87CEEB;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
         }
         canvas {
             display: block;
@@ -32,18 +35,15 @@
             top: 20px;
             left: 20px;
         }
-        #score-label, #score-value {
-            font-size: 26px;
-            text-transform: uppercase;
-        }
         #score-value {
             color: #ff0;
             font-weight: bold;
+            font-size: 26px;
         }
         #special-bar-container {
-            width: 250px;
-            height: 18px;
-            border: 3px solid #222;
+            width: 200px;
+            height: 14px;
+            border: 2px solid #222;
             background-color: #111;
             margin-top: 5px;
             position: relative;
@@ -51,53 +51,74 @@
         #special-bar-fill {
             height: 100%;
             background-color: #0f0;
-            width: 20%;
-            box-shadow: 0 0 10px #0f0;
+            width: 0%;
         }
         #special-text {
             position: absolute;
-            top: -1px;
-            left: 8px;
-            font-size: 13px;
+            top: -2px;
+            left: 6px;
+            font-size: 11px;
             font-weight: bold;
-            color: #fff;
         }
         #top-right-hud {
             position: absolute;
             top: 20px;
             right: 20px;
-            font-size: 36px;
+            font-size: 32px;
             color: #f33;
             font-weight: bold;
         }
         #bottom-center-hud {
             position: absolute;
-            bottom: 40px;
+            bottom: 120px;
             width: 100%;
             text-align: center;
         }
         #trick-text {
-            font-size: 28px;
-            margin-bottom: 5px;
+            font-size: 24px;
             color: #00ffcc;
             font-weight: bold;
-            min-height: 32px;
         }
-        #combo-score {
-            font-size: 22px;
-            color: #ff0;
-        }
-        #multiplier {
-            color: #fff;
-        }
-        #controls-guide {
+
+        /* --- Mobile Touch Controls --- */
+        .mobile-btn {
             position: absolute;
-            bottom: 10px;
-            right: 10px;
+            background: rgba(255, 255, 255, 0.25);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
             color: #fff;
+            text-align: center;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            display: none; /* Auto-detected via JS */
+            justify-content: center;
+            align-items: center;
+            text-shadow: 1px 1px 3px #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        #joystick-zone {
+            bottom: 40px;
+            left: 40px;
+            width: 110px;
+            height: 110px;
+        }
+        #btn-ollie {
+            bottom: 50px;
+            right: 40px;
+            width: 85px;
+            height: 85px;
+            font-size: 16px;
+            background: rgba(0, 200, 0, 0.3);
+        }
+        #btn-kickflip {
+            bottom: 145px;
+            right: 55px;
+            width: 65px;
+            height: 65px;
             font-size: 12px;
-            text-align: right;
-            text-shadow: 1px 1px #000;
+            background: rgba(0, 100, 255, 0.3);
         }
     </style>
 </head>
@@ -105,7 +126,7 @@
 
     <div id="ui">
         <div id="top-left-hud">
-            <div id="score-label">SCORE</div>
+            <div>SCORE</div>
             <div id="score-value">00000</div>
             <div id="special-bar-container">
                 <div id="special-bar-fill"></div>
@@ -115,23 +136,29 @@
         <div id="top-right-hud">2:00</div>
         <div id="bottom-center-hud">
             <div id="trick-text"></div>
-            <div id="combo-score"></div>
         </div>
     </div>
 
-    <div id="controls-guide">
-        WASD / Arrows: Steer | Spacebar: Ollie (Hold to Crouch) | Shift: Kickflip | W / I Key: Grind Ledges/Rails
-    </div>
+    <!-- Mobile Screen Elements -->
+    <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
+    <div id="btn-ollie" class="mobile-btn">OLLIE</div>
+    <div id="btn-kickflip" class="mobile-btn">FLIP</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
 
     <script>
-        // --- Game Setup Engine ---
+        // Detection for Mobile/iPhone
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if(isMobile) {
+            document.querySelectorAll('.mobile-btn').forEach(el => el.style.display = 'flex');
+        }
+
+        // --- Game Engine Setup ---
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
         let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
 
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x87CEEB, 0.005); // Sunny atmosphere fog
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.005);
         scene.background = new THREE.Color(0x87CEEB);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -140,68 +167,65 @@
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // --- Audio Synthesizer Engine (Web Audio API) ---
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // --- Audio Synthesizer Engine ---
+        let audioCtx = null;
         let grindNoiseNode = null;
         let grindGainNode = null;
 
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
         function playJumpSound() {
+            if(!audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
-            
             osc.type = 'triangle';
-            osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(350, audioCtx.currentTime + 0.15);
-            
+            osc.frequency.setValueAtTime(130, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(380, audioCtx.currentTime + 0.12);
             gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
-            
-            osc.start(); osc.stop(audioCtx.currentTime + 0.15);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.12);
         }
 
         function playFlipSound() {
+            if(!audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.connect(gain); gain.connect(audioCtx.destination);
-            
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-            osc.frequency.linearRampToValueAtTime(200, audioCtx.currentTime + 0.2);
-            
+            osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(220, audioCtx.currentTime + 0.18);
             gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-            
-            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.18);
         }
 
         function startGrindSound() {
-            if (grindNoiseNode) return; // Already running
-            
-            // Generate raw procedural friction white noise
+            if (!audioCtx || grindNoiseNode) return;
             const bufferSize = audioCtx.sampleRate * 1;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
-            }
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
             
             grindNoiseNode = audioCtx.createBufferSource();
             grindNoiseNode.buffer = buffer;
             grindNoiseNode.loop = true;
             
-            // Lowpass filter to make it sound metallic/scratchy rather than pure static hiss
             const filter = audioCtx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.value = 600;
+            filter.frequency.value = 550;
             
             grindGainNode = audioCtx.createGain();
-            grindGainNode.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            grindGainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
             
             grindNoiseNode.connect(filter);
             filter.connect(grindGainNode);
             grindGainNode.connect(audioCtx.destination);
-            
             grindNoiseNode.start();
         }
 
@@ -216,80 +240,89 @@
         }
 
         // --- Lights & Sun ---
-        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
         const sunLight = new THREE.DirectionalLight(0xfffaed, 0.9);
         sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
 
-        // Visual Sun Sphere in Sky
         const sunGeo = new THREE.SphereGeometry(6, 16, 16);
         const sunMat = new THREE.MeshBasicMaterial({ color: 0xffdd44 });
         const sunVisual = new THREE.Mesh(sunGeo, sunMat);
         sunVisual.position.set(120, 180, 80);
         scene.add(sunVisual);
 
-        // --- Procedural Canvas Textures (Safe from CORS!) ---
+        // --- Safe Procedural Textures ---
         function generateConcreteTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#b0b0b0'; ctx.fillRect(0,0,128,128); // Concrete gray lighter tone
-            ctx.fillStyle = '#9c9c9c';
-            for(let i=0; i<400; i++) {
-                ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
-            }
+            ctx.fillStyle = '#b5b5b5'; ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#9e9e9e';
+            for(let i=0; i<400; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
             const tex = new THREE.CanvasTexture(canvas);
             tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
-            tex.repeat.set(50, 50);
+            tex.repeat.set(60, 60);
             return tex;
         }
 
         function generateWoodTexture() {
             const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#5a3d28'; ctx.fillRect(0,0,128,128); // Darker Wood Tone
+            ctx.fillStyle = '#412b1c';
+            for(let i=0; i<128; i+=16) ctx.fillRect(i, 0, 4, 128);
+            const tex = new THREE.CanvasTexture(canvas);
+            return tex;
+        }
+
+        function generateRampTexture() {
+            const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#cc9966'; ctx.fillRect(0,0,64,64);
-            ctx.fillStyle = '#b3804d';
-            for(let i=0; i<64; i+=8) ctx.fillRect(0, i, 64, 2);
-            const tex = new THREE.CanvasTexture(canvas);
-            tex.magFilter = THREE.NearestFilter;
-            return tex;
+            ctx.fillStyle = '#d2a679'; ctx.fillRect(0,0,64,64);
+            ctx.fillStyle = '#be9366';
+            for(let i=0; i<64; i+=8) ctx.fillRect(0, i, 64, 1);
+            return new THREE.CanvasTexture(canvas);
         }
 
         const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateConcreteTexture() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
+        const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture() });
         const railMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.9, roughness: 0.1 });
 
-        // --- Ground & Fencing ---
+        // Ground Mesh
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // Chain-link Fence Enclosure
+        // --- Wooden Fence Perimeter Setup ---
         const fenceGroup = new THREE.Group();
-        function createFenceWall(w, h, x, z, rotY) {
+        function createWoodFence(w, h, x, z, rotY) {
             const wall = new THREE.Group();
-            const wireGeo = new THREE.PlaneGeometry(w, h);
-            const wireMat = new THREE.MeshBasicMaterial({ color: 0x778899, wireframe: true, transparent: true, opacity: 0.25 });
-            const mesh = new THREE.Mesh(wireGeo, wireMat);
-            mesh.position.y = h/2;
-            wall.add(mesh);
-            for(let i = -w/2; i <= w/2; i += 15) {
-                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, h), new THREE.MeshLambertMaterial({ color: 0x667788 }));
-                post.position.set(i, h/2, 0);
-                wall.add(post);
+            const fencePostGeo = new THREE.BoxGeometry(0.4, h, 0.4);
+            const plankGeo = new THREE.BoxGeometry(w, 0.6, 0.15);
+            
+            // Render individual wooden panel slabs dynamically
+            for(let i = -w/2; i <= w/2; i += 1.8) {
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(1.6, h - 0.5, 0.1), woodMaterial);
+                plank.position.set(i, h/2, 0);
+                wall.add(plank);
             }
-            wall.position.set(x, 0, z);
-            wall.rotation.y = rotY;
+            // Cross bars
+            const cross1 = new THREE.Mesh(plankGeo, woodMaterial); cross1.position.set(0, h * 0.25, 0.1); wall.add(cross1);
+            const cross2 = cross1.clone(); cross2.position.y = h * 0.75; wall.add(cross2);
+            
+            wall.position.set(x, 0, z); wall.rotation.y = rotY;
             fenceGroup.add(wall);
         }
-        createFenceWall(240, 8, 0, 120, 0); createFenceWall(240, 8, 0, -120, 0);
-        createFenceWall(240, 8, 120, 0, Math.PI/2); createFenceWall(240, 8, -120, 0, Math.PI/2);
+        createWoodFence(240, 6, 0, 120, 0); createWoodFence(240, 6, 0, -120, 0);
+        createWoodFence(240, 6, 120, 0, Math.PI/2); createWoodFence(240, 6, -120, 0, Math.PI/2);
         scene.add(fenceGroup);
 
-        // --- Big Nick's Sign (White with Bold Blue Letters) ---
+        // --- Big Nick's Sign Billboard ---
         const signGroup = new THREE.Group();
         signGroup.position.set(0, 20, -105);
         const boardMesh = new THREE.Mesh(new THREE.BoxGeometry(54, 11, 1), new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -303,21 +336,21 @@
         sCtx.fillText("BIG NICK'S SKATEPARK", 256, 75);
         const signTex = new THREE.CanvasTexture(signCanvas);
         const signPlate = new THREE.Mesh(new THREE.PlaneGeometry(52, 9), new THREE.MeshBasicMaterial({ map: signTex }));
-        signPlate.position.z = 0.6;
-        signGroup.add(signPlate);
+        signPlate.position.z = 0.6; signGroup.add(signPlate);
         
         const signPost1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 24), new THREE.MeshLambertMaterial({ color: 0x333333 }));
         signPost1.position.set(-20, -12, 0); signGroup.add(signPost1);
         const signPost2 = signPost1.clone(); signPost2.position.x = 20; signGroup.add(signPost2);
         scene.add(signGroup);
 
-        // --- Obstacles Array Builder ---
+        // --- Obstacles Global Arrays ---
         const obstacles = [];
         const rails = [];
 
-        function addRamp(w, h, d, x, z, rotY) {
+        function addSteepMegaRamp(w, h, d, x, z, rotY) {
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
+            // Steeper triangular slope math calculations
             const vertices = new Float32Array([
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
                  w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
@@ -330,24 +363,17 @@
             const uvs = new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1, 0,0, 1,1, 0,1, 0,0, 1,0, 1,1, 0,1, 1,1, 1,0]);
             geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 
-            const mesh = new THREE.Mesh(geom, woodMaterial);
+            const mesh = new THREE.Mesh(geom, rampMaterial);
             mesh.castShadow = true; mesh.receiveShadow = true;
             group.add(mesh);
             group.position.set(x, 0, z); group.rotation.y = rotY;
             scene.add(group);
-            obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY, type: 'ramp' });
+            
+            // Register boundaries for strict collision mapping
+            obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY });
         }
 
-        function addGrindLedge(w, h, d, x, z, rotY) {
-            const geo = new THREE.BoxGeometry(w, h, d);
-            const mesh = new THREE.Mesh(geo, woodMaterial);
-            mesh.position.set(x, h/2, z); mesh.rotation.y = rotY;
-            mesh.castShadow = true; mesh.receiveShadow = true;
-            scene.add(mesh);
-            obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY, type: 'ledge' });
-        }
-
-        function addRail(startX, startZ, endX, endZ, h=1.0) {
+        function addRail(startX, startZ, endX, endZ, h=1.2) {
             const start = new THREE.Vector3(startX, h, startZ);
             const end = new THREE.Vector3(endX, h, endZ);
             const distance = start.distanceTo(end);
@@ -361,97 +387,81 @@
             rails.push({ start: start, end: end, height: h });
         }
 
-        // --- Build Out Independent Park Layout (No connections or clipping) ---
-        // Massive Mega Ramps
-        addRamp(20, 6.5, 22, 0, -40, 0);          // HUGE Center-Back Mega Launch
-        addRamp(18, 5.0, 18, -65, -30, Math.PI/3); // Heavy Left Mega Box
+        // --- Layout Map Populating (All separated to prevent passing through) ---
+        addSteepMegaRamp(24, 7.5, 18, 0, -50, 0);          // South Steep Mega
+        addSteepMegaRamp(20, 6.0, 15, -70, -20, Math.PI/2.5); // West Steep Mega
+        addSteepMegaRamp(20, 6.0, 15, 70, -20, -Math.PI/2.5); // East Steep Mega
+        addSteepMegaRamp(22, 6.5, 16, 0, 50, Math.PI);       // North Steep Mega
 
-        // Medium & Small Ramps
-        addRamp(12, 3.0, 12, 60, -40, -Math.PI/2); 
-        addRamp(10, 2.2, 10, -45, 45, Math.PI/4);
-        addRamp(12, 2.5, 12, 45, 50, 0);
+        addRail(-35, 15, -5, 15, 1.2);
+        addRail(5, 15, 35, 15, 1.2);
+        addRail(-35, -15, -5, -15, 1.2);
+        addRail(5, -15, 35, -15, 1.2);
 
-        // Distinct Grind Ledges (Away from ramps)
-        addGrindLedge(16, 1.2, 3, 35, 0, 0);     
-        addGrindLedge(20, 1.5, 4, -20, 0, Math.PI/4); 
-        addGrindLedge(14, 1.0, 3, 0, 30, Math.PI/2);
-
-        // Independent Rails (Clear paths)
-        addRail(-30, -75, -30, -35, 1.1);         
-        addRail(35, -25, 60, -5, 1.0);            
-        addRail(-25, 75, 15, 75, 0.95);           
-        addRail(25, 20, 25, 60, 1.0);
-
-        // --- Skater Character Compounding Assembly ---
+        // --- Skater & Completely Rounded Skateboard Assembly ---
         const skaterRoot = new THREE.Group();
         const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
 
-        // Skateboard Deck with Adjusted Height Profile (Wheels completely under board)
-        const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 3.4), new THREE.MeshLambertMaterial({ color: 0x1d1d1d }));
-        deckMesh.position.y = 0.5; // Raised deck up to fully clear wheel tops
-        boardGroup.add(deckMesh);
+        // Core Rounded Edges Deck Construction
+        const deckCenter = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.12, 2.4), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+        deckCenter.position.y = 0.52; boardGroup.add(deckCenter);
+
+        // Rounded Nose/Tail Cylinders to guarantee a smooth oval curved profile shape
+        const roundEdgeGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.12, 16, 1, false, 0, Math.PI);
+        const noseCap = new THREE.Mesh(roundEdgeGeo, new THREE.MeshLambertMaterial({ color: 0x222222 }));
+        noseCap.position.set(0, 0.52, 1.2); noseCap.rotation.x = Math.PI/2; noseCap.rotation.z = Math.PI;
+        boardGroup.add(noseCap);
+
+        const tailCap = noseCap.clone(); tailCap.position.z = -1.2; tailCap.rotation.z = 0;
+        boardGroup.add(tailCap);
         
-        const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.2, 16);
-        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xf5f5f5 });
-        const wOffset = [[-0.45, 1.0], [0.45, 1.0], [-0.45, -1.0], [0.45, -1.0]];
+        // Wheel sets repositioned down to avoid clipping visuals through top of deck face
+        const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.18, 16);
+        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xeeeeee });
+        const wOffset = [[-0.45, 0.9], [0.45, 0.9], [-0.45, -0.9], [0.45, -0.9]];
         wOffset.forEach(pos => {
             const wheel = new THREE.Mesh(wheelGeo, wheelMat);
-            // Lowered wheels securely to eliminate clipping visuals through top deck face
             wheel.position.set(pos[0], 0.24, pos[1]); wheel.rotation.z = Math.PI/2;
             boardGroup.add(wheel);
         });
 
-        // Skater Skeleton Node Tree (locked sideways perpendicular posture)
-        const skaterSkeleton = new THREE.Group();
-        skaterSkeleton.position.y = 0.5; skaterRoot.add(skaterSkeleton);
+        // Sideways stance node tree skeleton map housing
+        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.52; skaterRoot.add(skaterSkeleton);
+        const stanceGroup = new THREE.Group(); stanceGroup.rotation.y = Math.PI / 2; skaterSkeleton.add(stanceGroup);
 
-        const stanceGroup = new THREE.Group();
-        stanceGroup.rotation.y = Math.PI / 2; // Locked perpendicular
-        skaterSkeleton.add(stanceGroup);
-
-        // Two Legs
         const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.25), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
         leftLeg.position.set(-0.4, 0.4, 0); stanceGroup.add(leftLeg);
         const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.4; stanceGroup.add(rightLeg);
 
-        // Torso & Face
         const torsoGroup = new THREE.Group(); torsoGroup.position.y = 0.8; stanceGroup.add(torsoGroup);
-        const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.4), new THREE.MeshLambertMaterial({ color: 0xdd3333 }));
-        shirt.position.y = 0.55; torsoGroup.add(shirt);
+        const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.1, 0.4), new THREE.MeshLambertMaterial({ color: 0xdd3333 })); shirt.position.y = 0.55; torsoGroup.add(shirt);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); head.position.y = 1.3; torsoGroup.add(head);
 
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
-        head.position.y = 1.3; torsoGroup.add(head);
-
-        // NO HAIR - Swapped directly into a Pure Black Backward Facing Cap
+        // BALD HEAD + PURE BLACK BASEBALL CAP ASSET
         const capGroup = new THREE.Group(); capGroup.position.set(0, 1.5, 0);
-        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); // Black cap dome
-        capGroup.add(capDome);
-        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.26), new THREE.MeshLambertMaterial({ color: 0x111111 })); // Black brim
-        capBrim.position.set(0, -0.05, -0.25); // Backward facing brim
-        capGroup.add(capBrim);
+        const capDome = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshLambertMaterial({ color: 0x111111 })); capGroup.add(capDome);
+        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.04, 0.26), new THREE.MeshLambertMaterial({ color: 0x111111 })); capBrim.position.set(0, -0.05, -0.25); capGroup.add(capBrim);
         torsoGroup.add(capGroup);
 
-        // Dual Arms Hooks
         const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.5, 0.9, 0); torsoGroup.add(leftArmRoot);
-        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
-        leftArm.position.y = -0.4; leftArmRoot.add(leftArm);
-
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); leftArm.position.y = -0.4; leftArmRoot.add(leftArm);
         const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.5, 0.9, 0); torsoGroup.add(rightArmRoot);
         const rightArm = leftArm.clone(); rightArm.position.y = -0.4; rightArmRoot.add(rightArm);
 
         skaterRoot.position.set(0, 0, 80);
         scene.add(skaterRoot);
 
-        // --- Controls System Hooks ---
+        // --- Unified Keyboard + Mobile Touch Control Handling Engine ---
         let speed = 0, heading = 0, yVelocity = 0;
         let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
         let flipActive = false, flipProgress = 0;
+        let touchSteerDirection = 0; // -1 Left, 1 Right, 0 Center
 
         const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
+
+        // Keyboard Actions
         window.addEventListener('keydown', e => {
-            // Unlock audio context context tracking rules for browser safety security layers
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-            
+            initAudio();
             if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
             if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
             if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
@@ -466,18 +476,54 @@
             if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
             if(e.key===' ') {
                 keys.space = false;
-                if(isGrounded && ollieHold) {
-                    ollieHold = false;
-                    yVelocity = 0.31 + (crouchAmt * 0.14); // Higher pop
-                    isGrounded = false; isGrinding = false;
-                    playJumpSound(); // Play Audio
-                    registerTrick("OLLIE", 50);
-                }
+                triggerOllieRelease();
             }
             if(e.key==='Shift') keys.shift = false;
         });
 
-        // --- Logic System Accounting Math ---
+        // Mobile Screen Touch Action Mapping listeners
+        const joyZone = document.getElementById('joystick-zone');
+        joyZone.addEventListener('touchstart', e => {
+            initAudio();
+            const t = e.touches[0];
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            touchSteerDirection = (t.clientX < centerX) ? -1 : 1;
+        }, {passive: true});
+        joyZone.addEventListener('touchmove', e => {
+            const t = e.touches[0];
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width/2;
+            touchSteerDirection = (t.clientX < centerX) ? -1 : 1;
+        }, {passive: true});
+        joyZone.addEventListener('touchend', () => { touchSteerDirection = 0; });
+
+        const oBtn = document.getElementById('btn-ollie');
+        oBtn.addEventListener('touchstart', e => { initAudio(); if(isGrounded) ollieHold = true; }, {passive: true});
+        oBtn.addEventListener('touchend', e => { triggerOllieRelease(); }, {passive: true});
+
+        const fBtn = document.getElementById('btn-kickflip');
+        fBtn.addEventListener('touchstart', e => { initAudio(); triggerKickflipAction(); }, {passive: true});
+
+        function triggerOllieRelease() {
+            if(isGrounded && ollieHold) {
+                ollieHold = false;
+                yVelocity = 0.32 + (crouchAmt * 0.15);
+                isGrounded = false; isGrinding = false;
+                playJumpSound();
+                registerTrick("OLLIE", 50);
+            }
+        }
+
+        function triggerKickflipAction() {
+            if (!isGrounded && !flipActive) {
+                flipActive = true; flipProgress = 0;
+                playFlipSound();
+                registerTrick("KICKFLIP", 300);
+            }
+        }
+
+        // --- System Combo Accounting Processing ---
         function registerTrick(name, pts) {
             if(!activeTricks.includes(name)) {
                 activeTricks.push(name);
@@ -515,88 +561,96 @@
                 document.getElementById('special-text').innerText = "SPECIAL";
             }
             if(currentComboPoints > 0) {
-                document.getElementById('trick-text').innerText = activeTricks.join(" + ");
-                document.getElementById('combo-score').innerHTML = `${currentComboPoints} <span id="multiplier">X${currentComboMultiplier}</span>`;
-            } else { document.getElementById('combo-score').innerHTML = ""; }
+                document.getElementById('trick-text').innerText = activeTricks.join(" + ") + ` ${currentComboPoints} x${currentComboMultiplier}`;
+            } else if(!document.getElementById('trick-text').innerText.includes("WIPEOUT")) {
+                document.getElementById('trick-text').innerText = "";
+            }
         }
 
-        // --- Main Engine Run Cycle ---
+        // --- Main Animation Frame Run Cycle ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Timer Clock tracking
+            // Clock tracking
             timerSeconds -= (1/60);
             if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            // Special Mode processing
             if(isSpecialActive) {
                 specialTimer -= (1/60); specialMeter = (specialTimer / 10.0) * 100; updateHUD();
                 if(specialTimer <= 0) { isSpecialActive = false; specialMeter = 0; updateHUD(); }
             }
 
-            // Turning Steering
-            if (keys.a) heading += 0.045;
-            if (keys.d) heading -= 0.045;
+            // Steer rotation handling via Dual Inputs
+            if (keys.a || touchSteerDirection === -1) heading += 0.045;
+            if (keys.d || touchSteerDirection === 1) heading -= 0.045;
             skaterRoot.rotation.y = heading;
 
-            let maxSpd = isSpecialActive ? 0.85 : 0.40; // Slightly higher speeds on massive ramps
+            let maxSpd = isSpecialActive ? 0.90 : 0.44;
             let acc = isSpecialActive ? 0.08 : 0.05;
 
-            if (keys.w && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
-            else if (keys.s && isGrounded) speed += (-0.18 - speed) * 0.08;
+            // Mobile auto-drives forward, keypress controls on desktop setup
+            let wantingToDrive = keys.w || isMobile;
+
+            if (wantingToDrive && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
+            else if (keys.s && isGrounded) speed += (-0.22 - speed) * 0.08;
             else if (isGrounded) speed *= 0.96;
 
-            if (!isGrinding) {
-                skaterRoot.position.x += speed * Math.sin(heading);
-                skaterRoot.position.z += speed * Math.cos(heading);
-            }
+            // Preserve temporary coordinates vector for boundary safety check tests
+            let nextX = skaterRoot.position.x + speed * Math.sin(heading);
+            let nextZ = skaterRoot.position.z + speed * Math.cos(heading);
 
-            // Crouch system processing
-            if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
-            else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
-
-            // Kickflip action processing
-            if (keys.shift && !isGrounded && !flipActive) { 
-                flipActive = true; flipProgress = 0; 
-                playFlipSound(); // Play Audio
-                registerTrick("KICKFLIP", 300); 
-            }
-            if (flipActive) {
-                flipProgress += 0.35; boardGroup.rotation.z = flipProgress;
-                if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
-            }
-
-            // --- Math Collision Solvers ---
+            // --- strict Solid-Wall Object Collision Calculations ---
             let groundHeight = 0;
+            let collisionBlocked = false;
 
             obstacles.forEach(obs => {
-                let dx = skaterRoot.position.x - obs.x;
-                let dz = skaterRoot.position.z - obs.z;
+                let dx = nextX - obs.x;
+                let dz = nextZ - obs.z;
 
                 let cos = Math.cos(-obs.rotY); let sin = Math.sin(-obs.rotY);
                 let rx = dx * cos - dz * sin;
                 let rz = dx * sin + dz * cos;
 
-                if (obs.type === 'ramp') {
-                    if (Math.abs(rx) < obs.w/2 && Math.abs(rz) < obs.d/2) {
+                // Check bounding container margins
+                if (Math.abs(rx) < (obs.w/2 + 0.6) && Math.abs(rz) < (obs.d/2 + 0.6)) {
+                    // If skater is lower than the top profile peak, treat it as a hard block wall!
+                    if (skaterRoot.position.y < obs.h - 0.2) {
+                        collisionBlocked = true;
+                    } else {
+                        // Skater is above the ramp plane, engage slide elevation height resolver
                         let ratio = (obs.d/2 - rz) / obs.d;
-                        groundHeight = ratio * obs.h;
-                    }
-                } else if (obs.type === 'ledge') {
-                    if (Math.abs(rx) < obs.w/2 && Math.abs(rz) < obs.d/2) {
-                        groundHeight = obs.h;
+                        if(ratio >= 0 && ratio <= 1) {
+                            groundHeight = ratio * obs.h;
+                        }
                     }
                 }
             });
 
-            // Boundary limits
+            if (!isGrinding && !collisionBlocked) {
+                skaterRoot.position.x = nextX;
+                skaterRoot.position.z = nextZ;
+            } else if (collisionBlocked) {
+                speed *= -0.4; // Bounce gently backwards off solid wall blocks
+            }
+
+            // Map Bounds Clamping containment
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
             if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
 
-            // --- Rail Grinding Tracking Engine ---
+            if (keys.shift) triggerKickflipAction();
+            if (flipActive) {
+                flipProgress += 0.35; boardGroup.rotation.z = flipProgress;
+                if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
+            }
+
+            // Crouch tracking mechanics processing
+            if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
+            else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
+
+            // --- Rail Grinding Verification loops ---
             if (!isGrounded && yVelocity <= 0 && !isGrinding) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
@@ -609,7 +663,7 @@
                             isGrinding = true; isGrounded = true;
                             skaterRoot.position.y = rail.height; yVelocity = 0;
                             heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
-                            startGrindSound(); // Play Audio loop
+                            startGrindSound();
                         }
                     }
                 });
@@ -617,7 +671,7 @@
 
             if (isGrinding) {
                 registerTrick("50-50 GRIND", 400); currentComboPoints += isSpecialActive ? 6 : 3; updateHUD();
-                let gSpd = isSpecialActive ? 0.55 : 0.28;
+                let gSpd = isSpecialActive ? 0.60 : 0.32;
                 skaterRoot.position.x += gSpd * Math.sin(heading);
                 skaterRoot.position.z += gSpd * Math.cos(heading);
 
@@ -630,7 +684,7 @@
 
                 if(!verifiedOnRail || keys.space) {
                     isGrinding = false; isGrounded = false;
-                    stopGrindSound(); // Stop Audio loop
+                    stopGrindSound();
                     if(keys.space) yVelocity = 0.24;
                 }
             }
@@ -643,34 +697,30 @@
                 if (skaterRoot.position.y <= groundHeight) {
                     skaterRoot.position.y = groundHeight;
                     yVelocity = 0; isGrounded = true;
-                    if(flipActive) { bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
+                    if(flipActive) { generalsBail = true; bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
                     else { landCombo(); }
                 }
             } else if (!isGrinding) {
                 skaterRoot.position.y = groundHeight;
             }
 
-            // --- Bone Node Animations ---
+            // Skater skeleton rigging frame node tracking
             leftLeg.position.y = 0.4 - (crouchAmt * 0.7);
             rightLeg.position.y = 0.4 - (crouchAmt * 0.7);
             torsoGroup.position.y = 0.8 - (crouchAmt * 1.1);
 
             if (isGrinding) {
                 leftArmRoot.rotation.z = -Math.PI / 2.3; rightArmRoot.rotation.z = Math.PI / 2.3;
-                leftArmRoot.rotation.x = 0; rightArmRoot.rotation.x = 0;
             } else if (ollieHold || flipActive) {
                 leftArmRoot.rotation.z = -0.2; rightArmRoot.rotation.z = 0.2;
-                leftArmRoot.rotation.x = 0.5; rightArmRoot.rotation.x = 0.5;
             } else if (!isGrounded) {
                 leftArmRoot.rotation.z = -Math.PI + 0.6; rightArmRoot.rotation.z = Math.PI - 0.6;
-                leftArmRoot.rotation.x = 0; rightArmRoot.rotation.x = 0;
             } else {
                 leftArmRoot.rotation.z = -0.15; rightArmRoot.rotation.z = 0.15;
-                leftArmRoot.rotation.x = 0; rightArmRoot.rotation.x = 0;
             }
 
-            // --- Dynamic Follow Camera ---
-            const relativeOffset = new THREE.Vector3(0, 5.0, -11.0);
+            // Camera Tracking Follow Target Lerp math
+            const relativeOffset = new THREE.Vector3(0, 5.5, -11.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
             camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.2, skaterRoot.position.z));
