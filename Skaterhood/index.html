@@ -161,6 +161,8 @@
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
@@ -238,6 +240,16 @@
         sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+
+        // Sky Dome
+        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyMat = new THREE.MeshBasicMaterial({
+            color: 0x87CEEB,
+            side: THREE.BackSide
+        });
+        scene.add(new THREE.Mesh(skyGeo, skyMat));
 
         // --- Environmental Textures ---
         function generateDarkConcrete() {
@@ -586,16 +598,19 @@
         }
 
         // --- Main Simulation Run Loops ---
+        const clock = new THREE.Clock();
+
         function animate() {
+            const delta = clock.getDelta();
             requestAnimationFrame(animate);
 
             // Time Tracking
-            timerSeconds -= (1/60);
+            timerSeconds -= delta;
             if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            if (keys.a || touchSteerDirection === -1) heading += 0.046;
-            if (keys.d || touchSteerDirection === 1) heading -= 0.046;
+            if (keys.a || touchSteerDirection === -1) heading += 2.8 * delta;
+            if (keys.d || touchSteerDirection === 1) heading -= 2.8 * delta;
             skaterRoot.rotation.y = heading;
 
             let maxSpd = isSpecialActive ? 0.95 : 0.46;
@@ -721,6 +736,8 @@
             const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
+            camera.fov = 70 + Math.min(Math.abs(speed) * 15, 10);
+            camera.updateProjectionMatrix();
             camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.0, skaterRoot.position.z));
 
             renderer.render(scene, camera);
