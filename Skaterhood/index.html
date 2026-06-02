@@ -161,8 +161,6 @@
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         document.body.appendChild(renderer.domElement);
@@ -240,16 +238,6 @@
         sunLight.position.set(60, 100, 40);
         sunLight.castShadow = true;
         scene.add(sunLight);
-        sunLight.shadow.mapSize.width = 2048;
-        sunLight.shadow.mapSize.height = 2048;
-
-        // Sky Dome
-        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
-        const skyMat = new THREE.MeshBasicMaterial({
-            color: 0x87CEEB,
-            side: THREE.BackSide
-        });
-        scene.add(new THREE.Mesh(skyGeo, skyMat));
 
         // --- Environmental Textures ---
         function generateDarkConcrete() {
@@ -598,19 +586,16 @@
         }
 
         // --- Main Simulation Run Loops ---
-        const clock = new THREE.Clock();
-
         function animate() {
-            const delta = clock.getDelta();
             requestAnimationFrame(animate);
 
             // Time Tracking
-            timerSeconds -= delta;
+            timerSeconds -= (1/60);
             if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            if (keys.a || touchSteerDirection === -1) heading += 2.8 * delta;
-            if (keys.d || touchSteerDirection === 1) heading -= 2.8 * delta;
+            if (keys.a || touchSteerDirection === -1) heading += 0.046;
+            if (keys.d || touchSteerDirection === 1) heading -= 0.046;
             skaterRoot.rotation.y = heading;
 
             let maxSpd = isSpecialActive ? 0.95 : 0.46;
@@ -710,7 +695,11 @@
                 if (skaterRoot.position.y <= groundHeight) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
                     if(flipActive) { bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
-                    else landCombo();
+                    else {
+        landingShake = 0.4;
+        spawnLandingParticles(skaterRoot.position.x, skaterRoot.position.y, skaterRoot.position.z);
+        landCombo();
+    }
                 }
             } else if (!isGrinding) {
                 skaterRoot.position.y = groundHeight;
@@ -736,11 +725,31 @@
             const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
             camera.position.lerp(worldOffset, 0.12);
-            camera.fov = 70 + Math.min(Math.abs(speed) * 15, 10);
-            camera.updateProjectionMatrix();
             camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.0, skaterRoot.position.z));
 
-            renderer.render(scene, camera);
+            
+    for(let i=particles.length-1;i>=0;i--){
+        const p=particles[i];
+        p.position.x += p.userData.vx;
+        p.position.y += p.userData.vy;
+        p.position.z += p.userData.vz;
+        p.userData.life -= 0.03;
+        if(p.userData.life<=0){
+            scene.remove(p);
+            particles.splice(i,1);
+        }
+    }
+
+    if(landingShake>0){
+        camera.position.x += (Math.random()-0.5)*landingShake;
+        camera.position.y += (Math.random()-0.5)*landingShake;
+        landingShake *= 0.85;
+    }
+
+    camera.fov = 70 + Math.min(Math.abs(speed)*18,15);
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+
         }
 
         window.addEventListener('resize', () => {
@@ -748,7 +757,55 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        animate();
+        
+// === CHATGPT ENHANCEMENT PACK ===
+let landingShake = 0;
+
+const particles = [];
+function spawnLandingParticles(x,y,z){
+    for(let i=0;i<20;i++){
+        const p = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08,6,6),
+            new THREE.MeshBasicMaterial({color:0xd0d0d0})
+        );
+        p.position.set(x,y+0.1,z);
+        p.userData = {
+            vx:(Math.random()-0.5)*0.25,
+            vy:Math.random()*0.15,
+            vz:(Math.random()-0.5)*0.25,
+            life:1
+        };
+        scene.add(p);
+        particles.push(p);
+    }
+}
+
+function addParkProps(){
+    const benchMat = new THREE.MeshLambertMaterial({color:0x8b5a2b});
+    for(let i=0;i<12;i++){
+        const bench = new THREE.Mesh(new THREE.BoxGeometry(3,0.3,1), benchMat);
+        bench.position.set((Math.random()-0.5)*180,0.8,(Math.random()-0.5)*180);
+        scene.add(bench);
+    }
+
+    for(let i=0;i<25;i++){
+        const trunk = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.3,0.4,3),
+            new THREE.MeshLambertMaterial({color:0x6b4423})
+        );
+        const leaves = new THREE.Mesh(
+            new THREE.SphereGeometry(1.8,10,10),
+            new THREE.MeshLambertMaterial({color:0x2f8f2f})
+        );
+        trunk.position.set((Math.random()-0.5)*240,1.5,(Math.random()-0.5)*240);
+        leaves.position.set(trunk.position.x,4,trunk.position.z);
+        scene.add(trunk);
+        scene.add(leaves);
+    }
+}
+addParkProps();
+
+animate();
     </script>
 </body>
 </html>
