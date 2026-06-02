@@ -26,7 +26,7 @@
             width: 100%;
             height: 100%;
             color: #fff;
-            text-shadow: 2px 2px #000;
+            text-shadow: 3px 3px #000;
             pointer-events: none;
             box-sizing: border-box;
         }
@@ -35,47 +35,33 @@
             top: 20px;
             left: 20px;
         }
+        #score-label {
+            font-size: 18px;
+            letter-spacing: 2px;
+        }
         #score-value {
             color: #ff0;
-            font-weight: bold;
-            font-size: 26px;
-        }
-        #special-bar-container {
-            width: 200px;
-            height: 14px;
-            border: 2px solid #222;
-            background-color: #111;
-            margin-top: 5px;
-            position: relative;
-        }
-        #special-bar-fill {
-            height: 100%;
-            background-color: #0f0;
-            width: 0%;
-        }
-        #special-text {
-            position: absolute;
-            top: -2px;
-            left: 6px;
-            font-size: 11px;
-            font-weight: bold;
+            font-weight: 900;
+            font-size: 46px;
+            font-family: 'Impact', 'Arial Black', sans-serif;
         }
         #top-right-hud {
             position: absolute;
             top: 20px;
             right: 20px;
-            font-size: 32px;
+            font-size: 42px;
             color: #f33;
-            font-weight: bold;
+            font-weight: 900;
+            font-family: 'Impact', 'Arial Black', sans-serif;
         }
         #bottom-center-hud {
             position: absolute;
-            bottom: 120px;
+            bottom: 160px;
             width: 100%;
             text-align: center;
         }
         #trick-text {
-            font-size: 24px;
+            font-size: 28px;
             color: #00ffcc;
             font-weight: bold;
         }
@@ -94,18 +80,18 @@
             z-index: 100;
         }
         #game-over-screen h1 {
-            font-size: 48px;
+            font-size: 54px;
             color: #f33;
             margin-bottom: 10px;
         }
         #final-score-text {
-            font-size: 32px;
+            font-size: 36px;
             color: #ff0;
             margin-bottom: 30px;
         }
         #btn-restart {
-            padding: 15px 35px;
-            font-size: 22px;
+            padding: 18px 45px;
+            font-size: 24px;
             font-family: 'Courier New', Courier, monospace;
             font-weight: bold;
             background: #0c0;
@@ -115,66 +101,59 @@
             text-shadow: 1px 1px #000;
             box-shadow: 0 0 15px rgba(0,255,0,0.4);
         }
-        #btn-restart:hover {
-            background: #0f0;
-        }
 
-        /* --- Mobile Touch Controls --- */
+        /* --- Oversized Mobile Touch Control Array --- */
         .mobile-btn {
             position: absolute;
-            background: rgba(255, 255, 255, 0.25);
-            border: 3px solid rgba(255, 255, 255, 0.6);
+            background: rgba(255, 255, 255, 0.3);
+            border: 4px solid rgba(255, 255, 255, 0.8);
             border-radius: 50%;
             color: #fff;
             text-align: center;
             font-weight: bold;
-            font-family: Arial, sans-serif;
+            font-family: 'Arial Black', Arial, sans-serif;
             user-select: none;
             -webkit-user-select: none;
             display: none;
             justify-content: center;
             align-items: center;
-            text-shadow: 1px 1px 3px #000;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            text-shadow: 2px 2px 4px #000;
+            box-shadow: 0 0 15px rgba(0,0,0,0.4);
             z-index: 10;
         }
-        #joystick-zone {
-            bottom: 40px;
-            left: 40px;
-            width: 110px;
-            height: 110px;
-        }
+        
+        /* Made buttons significantly larger for mobile playability */
         #btn-ollie {
-            bottom: 40px;
-            right: 40px;
-            width: 85px;
-            height: 85px;
-            font-size: 16px;
-            background: rgba(0, 200, 0, 0.3);
+            bottom: 30px;
+            right: 30px;
+            width: 115px;
+            height: 115px;
+            font-size: 20px;
+            background: rgba(0, 220, 0, 0.4);
         }
         #btn-kickflip {
-            bottom: 135px;
-            right: 30px;
-            width: 65px;
-            height: 65px;
-            font-size: 11px;
-            background: rgba(0, 100, 255, 0.3);
+            bottom: 165px;
+            right: 25px;
+            width: 90px;
+            height: 90px;
+            font-size: 14px;
+            background: rgba(0, 120, 255, 0.4);
         }
         #btn-backflip {
-            bottom: 135px;
-            right: 105px;
-            width: 65px;
-            height: 65px;
-            font-size: 10px;
-            background: rgba(180, 0, 255, 0.35);
+            bottom: 165px;
+            right: 135px;
+            width: 90px;
+            height: 90px;
+            font-size: 13px;
+            background: rgba(190, 0, 255, 0.45);
         }
         #btn-treflip {
-            bottom: 40px;
-            right: 135px;
-            width: 65px;
-            height: 65px;
-            font-size: 10px;
-            background: rgba(0, 180, 180, 0.35);
+            bottom: 30px;
+            right: 165px;
+            width: 90px;
+            height: 90px;
+            font-size: 13px;
+            background: rgba(0, 200, 200, 0.45);
         }
     </style>
 </head>
@@ -182,14 +161,10 @@
 
     <div id="ui">
         <div id="top-left-hud">
-            <div>SCORE</div>
+            <div id="score-label">SCORE</div>
             <div id="score-value">00000</div>
-            <div id="special-bar-container">
-                <div id="special-bar-fill"></div>
-                <span id="special-text">SPECIAL</span>
-            </div>
         </div>
-        <div id="top-right-hud">2:00</div>
+        <div id="top-right-hud">1:00</div>
         <div id="bottom-center-hud">
             <div id="trick-text"></div>
         </div>
@@ -201,7 +176,6 @@
         <button id="btn-restart">SKATE AGAIN?</button>
     </div>
 
-    <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
     <div id="btn-ollie" class="mobile-btn">OLLIE</div>
     <div id="btn-kickflip" class="mobile-btn">KICKFLIP</div>
     <div id="btn-backflip" class="mobile-btn">BACKFLIP</div>
@@ -216,8 +190,8 @@
         }
 
         // --- Game Setup Variables ---
-        let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
-        let activeTricks = [], timerSeconds = 120, isSpecialActive = false, isGameOver = false;
+        let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0;
+        let activeTricks = [], timerSeconds = 60, isGameOver = false; // Changed time limit to 1 minute
         let landingShake = 0;
         const particles = [];
 
@@ -339,6 +313,26 @@
             return new THREE.CanvasTexture(canvas);
         }
 
+        // Text Generator for retro signs
+        function createTextSignTexture(text, bgColor, textColor, width, height, isNeon = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = bgColor; ctx.fillRect(0, 0, width, height);
+            
+            if (isNeon) {
+                ctx.shadowColor = textColor;
+                ctx.shadowBlur = 15;
+            }
+            
+            ctx.fillStyle = textColor;
+            ctx.font = `bold ${height * 0.5}px 'Impact', 'Arial Black', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2);
+            return new THREE.CanvasTexture(canvas);
+        }
+
         const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateDarkConcrete() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
         const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture(), side: THREE.DoubleSide });
@@ -369,6 +363,30 @@
         createWoodFence(240, 5.5, 0, 120, 0); createWoodFence(240, 5.5, 0, -120, 0);
         createWoodFence(240, 5.5, 120, 0, Math.PI/2); createWoodFence(240, 5.5, -120, 0, Math.PI/2);
         scene.add(fenceGroup);
+
+        // --- Custom Park Signs ---
+        function spawnParkSigns() {
+            // 1. Big "Big Nick's Skateboard" Entry Archway Sign
+            const archGroup = new THREE.Group();
+            archGroup.position.set(0, 0, 95);
+            
+            const postGeo = new THREE.CylinderGeometry(0.4, 0.4, 18, 8);
+            const leftPost = new THREE.Mesh(postGeo, woodMaterial); leftPost.position.set(-15, 9, 0); archGroup.add(leftPost);
+            const rightPost = leftPost.clone(); rightPost.position.x = 15; archGroup.add(rightPost);
+            
+            const signTex = createTextSignTexture("Big Nick's Skateboard", "#4a2f1b", "#ffcc00", 512, 128);
+            const signBoard = new THREE.Mesh(new THREE.BoxGeometry(34, 4.5, 0.4), new THREE.MeshLambertMaterial({ map: signTex }));
+            signBoard.position.set(0, 17, 0);
+            archGroup.add(signBoard);
+            scene.add(archGroup);
+
+            // 2. "LEE RULES!" Neon Sign on the fence
+            const leeTex = createTextSignTexture("LEE RULES!", "#111111", "#ff00ff", 256, 128, true);
+            const leeSign = new THREE.Mesh(new THREE.PlaneGeometry(12, 6), new THREE.MeshBasicMaterial({ map: leeTex, side: THREE.DoubleSide }));
+            leeSign.position.set(-50, 4.5, -119.3); // Mounted onto rear perimeter fence
+            scene.add(leeSign);
+        }
+        spawnParkSigns();
 
         // Background Neighborhood Houses
         function addBackgroundHouses() {
@@ -409,7 +427,6 @@
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
             
-            // Re-engineered vertex mapping matrix to seal the bottom, sides, and completely shut the back walls
             const vertices = new Float32Array([
                 // Front Incline Slope Plane
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
@@ -549,20 +566,31 @@
         }
         spawnSkaterNPCs();
 
-        // --- Fence Boundary Trees ---
+        // --- Custom Boundary Trees (Different Sizes & Shades) ---
         function addMassiveFenceTrees() {
             const trunkGeo = new THREE.CylinderGeometry(0.9, 1.3, 16, 12);
             const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2f1b });
+            
+            // Varied shade array for tree foliage
+            const greens = [0x134f13, 0x195c19, 0x0f3d0f, 0x226b22, 0x1b4d22];
             const leafGeo = new THREE.ConeGeometry(5.5, 14, 10);
-            const leafMat = new THREE.MeshLambertMaterial({ color: 0x134f13 });
 
-            for (let i = 0; i < 35; i++) {
+            for (let i = 0; i < 40; i++) {
                 const tree = new THREE.Group();
                 const tMesh = new THREE.Mesh(trunkGeo, trunkMat); tMesh.position.y = 8; tree.add(tMesh);
-                const lMesh = new THREE.Mesh(leafGeo, leafMat); lMesh.position.y = 17; tree.add(lMesh);
+                
+                const randomGreen = greens[Math.floor(Math.random() * greens.length)];
+                const lMesh = new THREE.Mesh(leafGeo, new THREE.MeshLambertMaterial({ color: randomGreen })); 
+                lMesh.position.y = 17; 
+                tree.add(lMesh);
+                
+                // Randomly vary height scale and width profile to make sizes distinct
+                const heightScale = 0.65 + Math.random() * 0.8;
+                const widthScale = 0.8 + Math.random() * 0.5;
+                tree.scale.set(widthScale, heightScale, widthScale);
                 
                 let side = i % 4;
-                let posOffset = (Math.random() - 0.5) * 220;
+                let posOffset = (Math.random() - 0.5) * 225;
                 if (side === 0) tree.position.set(posOffset, 0, 114);
                 else if (side === 1) tree.position.set(posOffset, 0, -114);
                 else if (side === 2) tree.position.set(114, 0, posOffset);
@@ -612,7 +640,7 @@
             if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
             if(e.key==='d' || e.key==='ArrowRight') keys.d = true;
             if(e.key===' ') { keys.space = true; if(isGrounded) ollieHold = true; }
-            if(e.key==='Shift') keys.shift = true;
+            if(e.key==='Shift') { keys.shift = true; triggerKickflipAction(); }
             if(e.key==='b' || e.key==='B') { keys.b = true; triggerBackflipAction(); }
             if(e.key==='3') { keys.tre = true; triggerTreflipAction(); }
         });
@@ -627,26 +655,44 @@
             if(e.key==='3') keys.tre = false;
         });
 
-        // Mobile Handlers
-        const joyZone = document.getElementById('joystick-zone');
-        joyZone.addEventListener('touchstart', e => {
+        // Full-Screen Mobile Steering Router (Left side = left, Right side = right)
+        window.addEventListener('touchstart', e => {
             if(isGameOver) return;
             initAudio();
-            const rect = joyZone.getBoundingClientRect();
-            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
+            
+            // Check if user is clicking a designated right deck control button
+            if (e.target.classList.contains('mobile-btn')) return;
+            
+            const touchX = e.touches[0].clientX;
+            if (touchX < window.innerWidth / 2) {
+                touchSteerDirection = -1; // Touch Left Half
+            } else {
+                touchSteerDirection = 1;  // Touch Right Half
+            }
         }, {passive: true});
-        joyZone.addEventListener('touchmove', e => {
-            if(isGameOver) return;
-            const rect = joyZone.getBoundingClientRect();
-            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
-        }, {passive: true});
-        joyZone.addEventListener('touchend', () => { touchSteerDirection = 0; });
 
-        document.getElementById('btn-ollie').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); if(isGrounded) ollieHold = true; } }, {passive: true});
-        document.getElementById('btn-ollie').addEventListener('touchend', () => { if(!isGameOver) triggerOllieRelease(); }, {passive: true});
-        document.getElementById('btn-kickflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerKickflipAction(); } }, {passive: true});
-        document.getElementById('btn-backflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerBackflipAction(); } }, {passive: true});
-        document.getElementById('btn-treflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerTreflipAction(); } }, {passive: true});
+        window.addEventListener('touchmove', e => {
+            if(isGameOver || touchSteerDirection === 0) return;
+            const touchX = e.touches[0].clientX;
+            if (touchX < window.innerWidth / 2) {
+                touchSteerDirection = -1;
+            } else {
+                touchSteerDirection = 1;
+            }
+        }, {passive: true});
+
+        window.addEventListener('touchend', e => {
+            if (e.touches.length === 0) {
+                touchSteerDirection = 0;
+            }
+        }, {passive: true});
+
+        // Oversized Mobile Button Core Event Mapping
+        document.getElementById('btn-ollie').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); if(isGrounded) ollieHold = true; } }, {passive: true});
+        document.getElementById('btn-ollie').addEventListener('touchend', (e) => { e.stopPropagation(); if(!isGameOver) triggerOllieRelease(); }, {passive: true});
+        document.getElementById('btn-kickflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerKickflipAction(); } }, {passive: true});
+        document.getElementById('btn-backflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerBackflipAction(); } }, {passive: true});
+        document.getElementById('btn-treflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerTreflipAction(); } }, {passive: true});
 
         function triggerOllieRelease() {
             if(isGrounded && ollieHold) {
@@ -658,8 +704,14 @@
             }
         }
 
+        // Updated Tricks: Ground triggers automatically add yVelocity to hop instantly without manual Ollie
         function triggerKickflipAction() {
-            if (!isGrounded && !flipActive && !treflipActive) {
+            if (!flipActive && !treflipActive) {
+                if (isGrounded) {
+                    isGrounded = false; isGrinding = false;
+                    yVelocity = 0.32;
+                    playJumpSound();
+                }
                 flipActive = true; flipProgress = 0;
                 playFlipSound();
                 registerTrick("KICKFLIP", 300);
@@ -667,7 +719,12 @@
         }
 
         function triggerBackflipAction() {
-            if (!isGrounded && !backflipActive) {
+            if (!backflipActive) {
+                if (isGrounded) {
+                    isGrounded = false; isGrinding = false;
+                    yVelocity = 0.36;
+                    playJumpSound();
+                }
                 backflipActive = true; backflipProgress = 0;
                 playFlipSound();
                 registerTrick("BACKFLIP", 500);
@@ -675,7 +732,12 @@
         }
 
         function triggerTreflipAction() {
-            if (!isGrounded && !treflipActive && !flipActive) {
+            if (!treflipActive && !flipActive) {
+                if (isGrounded) {
+                    isGrounded = false; isGrinding = false;
+                    yVelocity = 0.34;
+                    playJumpSound();
+                }
                 treflipActive = true; treflipProgress = 0;
                 playFlipSound();
                 registerTrick("360 FLIP", 700);
@@ -690,26 +752,24 @@
                 updateHUD();
             }
         }
+        
         function landCombo() {
             if(currentComboPoints > 0) {
                 totalScore += (currentComboPoints * currentComboMultiplier);
-                if(!isSpecialActive) {
-                    specialMeter = Math.min(100, specialMeter + (currentComboMultiplier * 12));
-                    if(specialMeter >= 100) { isSpecialActive = true; }
-                }
                 currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
                 updateHUD();
             }
         }
+        
         function bailCombo() {
             currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
             document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
             setTimeout(() => { if(!isGameOver) document.getElementById('trick-text').innerText=""; }, 1200);
             updateHUD();
         }
+        
         function updateHUD() {
             document.getElementById('score-value').innerText = Math.floor(totalScore).toString().padStart(5,'0');
-            document.getElementById('special-bar-fill').style.width = specialMeter + '%';
             if(currentComboPoints > 0) {
                 document.getElementById('trick-text').innerText = activeTricks.join(" + ") + ` ${currentComboPoints} x${currentComboMultiplier}`;
             } else if(!document.getElementById('trick-text').innerText.includes("WIPEOUT")) {
@@ -730,11 +790,10 @@
             totalScore = 0;
             currentComboPoints = 0;
             currentComboMultiplier = 0;
-            specialMeter = 20;
             activeTricks = [];
-            timerSeconds = 120;
-            isSpecialActive = false;
+            timerSeconds = 60; // Reset to 1 minute
             isGameOver = false;
+            touchSteerDirection = 0;
             
             skaterRoot.position.set(0, 0, 40);
             heading = 0;
@@ -768,8 +827,8 @@
             }
             skaterRoot.rotation.y = heading;
 
-            let maxSpd = isSpecialActive ? 0.95 : 0.46;
-            let acc = isSpecialActive ? 0.08 : 0.05;
+            let maxSpd = 0.52;
+            let acc = 0.06;
             let driving = (!isGameOver && (keys.w || isMobile));
 
             if (driving && !ollieHold) speed += (maxSpd - speed) * acc;
@@ -817,8 +876,6 @@
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
             if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
 
-            if (keys.shift && !isGameOver) triggerKickflipAction();
-            
             // Kickflip Rotation Transform
             if (flipActive) {
                 flipProgress += 0.35; 
@@ -836,8 +893,8 @@
             // 360 Treflip Rotation Transform (Spin on Y and roll on Z simultaneously)
             if (treflipActive) {
                 treflipProgress += 0.25;
-                boardGroup.rotation.y = treflipProgress * 2; // Full 360 Shuvit spin
-                boardGroup.rotation.z = treflipProgress;     // Barrel kickflip roll
+                boardGroup.rotation.y = treflipProgress * 2; 
+                boardGroup.rotation.z = treflipProgress;     
                 if (treflipProgress >= Math.PI * 2) {
                     boardGroup.rotation.y = 0;
                     boardGroup.rotation.z = 0;
@@ -953,7 +1010,7 @@
         });
 
         // Fire game system loop
-        animate();
+        animate()
     </script>
 </body>
 </html>
