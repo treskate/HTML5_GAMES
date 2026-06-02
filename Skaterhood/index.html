@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Big Nick's Skatepark</title>
+    <title>Big Nick Skatepark</title>
     <style>
         body {
             margin: 0;
@@ -39,6 +39,7 @@
             font-weight: 900;
             font-family: 'Impact', 'Arial Black', sans-serif;
             letter-spacing: 2px;
+            text-shadow: 3px 3px #000; /* Added matching black shadow */
         }
         #score-value {
             color: #ff0;
@@ -106,7 +107,7 @@
             box-shadow: 0 0 15px rgba(0,255,0,0.4);
         }
 
-        /* --- Oversized Mobile Touch Control Array --- */
+        /* --- Mobile Controls --- */
         .mobile-btn {
             position: absolute;
             background: rgba(255, 255, 255, 0.3);
@@ -267,6 +268,19 @@
             return tex;
         }
 
+        function generateGrassTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#2d5a27'; ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#3b7333';
+            for(let i=0; i<600; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 2, 2);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(40, 40);
+            return tex;
+        }
+
         function generateWoodTexture() {
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
@@ -305,15 +319,23 @@
         }
 
         const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateDarkConcrete() });
+        const grassMaterial = new THREE.MeshLambertMaterial({ map: generateGrassTexture() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
         const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture(), side: THREE.DoubleSide });
         const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
 
-        // Ground Mesh
-        const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
+        // Ground Mesh (Skatepark Concrete Pad)
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), concreteMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
+
+        // Outside Grass Floor Surroundings
+        const grassFloor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), grassMaterial);
+        grassFloor.rotation.x = -Math.PI / 2;
+        grassFloor.position.y = -0.05; // Placed slightly below the concrete pad to prevent clipping
+        grassFloor.receiveShadow = true;
+        scene.add(grassFloor);
 
         // Perimeter Fence
         const fenceGroup = new THREE.Group();
@@ -343,7 +365,7 @@
             const leftPost = new THREE.Mesh(postGeo, woodMaterial); leftPost.position.set(-22, 9, 0); archGroup.add(leftPost);
             const rightPost = leftPost.clone(); rightPost.position.x = 22; archGroup.add(rightPost);
             
-            const signTex = createTextSignTexture("Big Nick's Skateboard", "#4a2f1b", "#ffcc00", 1024, 128);
+            const signTex = createTextSignTexture("Big Nick Skatepark", "#4a2f1b", "#ffcc00", 1024, 128);
             const signBoard = new THREE.Mesh(new THREE.BoxGeometry(46, 5.0, 0.4), new THREE.MeshLambertMaterial({ map: signTex }));
             signBoard.position.set(0, 17, 0);
             archGroup.add(signBoard);
@@ -354,7 +376,6 @@
             leeSign.position.set(-50, 4.5, -119.3);
             scene.add(leeSign);
 
-            // MOVED: "Roblox Sucks" sign relocated to the clear left perimeter fence out of tree occlusion
             const robloxTex = createTextSignTexture("Roblox Sucks", "#ffffff", "#e60000", 512, 128);
             const robloxGroup = new THREE.Group();
             robloxGroup.position.set(-119, 0, -20);
@@ -367,7 +388,6 @@
             const bPostR = bPostL.clone(); bPostR.position.x = 7; robloxGroup.add(bPostR);
             scene.add(robloxGroup);
 
-            // NEW: "School Sux!" neon-style sign added on the right fence line
             const schoolTex = createTextSignTexture("School Sux!", "#1a1a1a", "#33ff33", 512, 128, true);
             const schoolSign = new THREE.Mesh(new THREE.PlaneGeometry(14, 6.0), new THREE.MeshBasicMaterial({ map: schoolTex, side: THREE.DoubleSide }));
             schoolSign.position.set(119.2, 5.0, 20);
@@ -376,7 +396,7 @@
         }
         spawnParkSigns();
 
-        // Background Neighborhood Houses + Urban Buildings Skyline
+        // Background Buildings Skyline
         function addBackgroundSkyline() {
             const houseColors = [0xaa4433, 0x4466aa, 0x558855, 0xddaa44, 0x887766];
             const buildingColors = [0x555555, 0x666666, 0x444444, 0x777777, 0x4a5560];
@@ -417,7 +437,7 @@
                 }
 
                 let side = i % 4;
-                let dist = 145 + Math.random() * 35;
+                let dist = 165 + Math.random() * 35;
                 let spread = (Math.random() - 0.5) * 260;
                 if (side === 0) element.position.set(spread, 0, dist);
                 else if (side === 1) element.position.set(spread, 0, -dist);
@@ -432,22 +452,22 @@
         // --- Obstacles Array Configuration ---
         const obstacles = [];
         const rails = [];
+        const solidProps = [];
+        const hazards = [];
 
-        // REBUILT RAMP MAKER FROM SCRATCH
         function addRamp(w, h, d, x, z, rotY) {
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
             
-            // Build absolute procedural geometric mesh profiles
             const vertices = new Float32Array([
-                // Incline Plane Slope Face
+                // Slope face
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
                  w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
-                // Left Structural Cap Wall
+                // Left structure
                 -w/2, 0,  d/2,  -w/2, h, -d/2,   -w/2, 0, -d/2,  
-                // Right Structural Cap Wall
+                // Right structure
                  w/2, 0,  d/2,   w/2, 0, -d/2,    w/2, h, -d/2,  
-                // Solid High Back Crest Partition Wall
+                // Back wall
                 -w/2, h, -d/2,   w/2, 0, -d/2,   -w/2, 0, -d/2,
                 -w/2, h, -d/2,   w/2, h, -d/2,    w/2, 0, -d/2
             ]);
@@ -467,7 +487,6 @@
             group.position.set(x, 0, z); group.rotation.y = rotY;
             scene.add(group);
             
-            // Register local tracking transforms
             obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY });
         }
 
@@ -486,21 +505,57 @@
             rails.push({ start: start, end: end, height: h });
         }
 
-        // --- UPDATED PARK LAYOUT: Moved Ramps Around & Flattened Grading ---
-        // Main North/South big ramps dropped from 8.5 down to a gentle 5.0 height, and deepened from 16 to 24 for a shallow grade.
-        addRamp(24, 5.0, 24, 0, -75, 0);       
-        addRamp(24, 5.0, 24, 0, 75, Math.PI);  
-        
-        // Lateral kicker components flattened from 5.0 height down to 3.2 height and shifted outward.
-        addRamp(18, 3.2, 16, -70, 0, Math.PI / 2);
-        addRamp(18, 3.2, 16, 70, 0, -Math.PI / 2);
-        
-        // Small corner wedges lowered to a flat 1.8 rise with expanded slope floor run-ups.
-        addRamp(14, 1.8, 12, -35, -45, Math.PI / 4);
-        addRamp(14, 1.8, 12, 35, 45, -Math.PI * 0.75);
+        function addTrashCan(x, z) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+            
+            const bodyGeo = new THREE.CylinderGeometry(1.1, 0.9, 2.6, 12);
+            const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2e5a36 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 1.3;
+            body.castShadow = true;
+            group.add(body);
+            
+            const rimGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.2, 12);
+            const rimMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const rim = new THREE.Mesh(rimGeo, rimMat);
+            rim.position.y = 2.6;
+            group.add(rim);
+
+            scene.add(group);
+            solidProps.push({ x: x, z: z, radius: 1.3, height: 2.7 });
+        }
+
+        function addFloorHole(x, z, r=3.5) {
+            const holeMesh = new THREE.Mesh(
+                new THREE.CylinderGeometry(r, r, 0.05, 16),
+                new THREE.MeshBasicMaterial({ color: 0x111111 })
+            );
+            holeMesh.position.set(x, 0.01, z);
+            scene.add(holeMesh);
+
+            const rim = new THREE.Mesh(
+                new THREE.CylinderGeometry(r + 0.3, r, 0.06, 16, 1, true),
+                new THREE.MeshBasicMaterial({ color: 0xdab000, side: THREE.DoubleSide })
+            );
+            rim.position.set(x, 0.02, z);
+            scene.add(rim);
+
+            hazards.push({ x: x, z: z, radius: r, passed: false });
+        }
+
+        // --- PARK LAYOUT ---
+        addRamp(24, 4.2, 26, 0, -75, 0);       // Main North Ramp
+        addRamp(24, 4.2, 26, 0, 75, Math.PI);  // Main South Ramp
 
         addHorizontalRail(-80, -45, -80, 35, 1.3);
         addHorizontalRail(80, -45, 80, 35, 1.3);
+
+        addTrashCan(-30, -10);
+        addTrashCan(30, 15);
+
+        addFloorHole(0, -25, 4.0);
+        addFloorHole(0, 25, 4.0);
 
         // --- Hero Skater Rig ---
         const skaterRoot = new THREE.Group();
@@ -549,7 +604,7 @@
         skaterRoot.position.set(0, 0, 40);
         scene.add(skaterRoot);
 
-        // --- Active AI Skaters (Increased Population & Diverse Sizing) ---
+        // --- Active AI Skaters ---
         const npcs = [];
         const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933, 0xff5555, 0x9933ff, 0x33ffff, 0xffff33];
 
@@ -594,7 +649,16 @@
             const greens = [0x134f13, 0x195c19, 0x0f3d0f, 0x226b22, 0x1b4d22];
             const leafGeo = new THREE.ConeGeometry(5.5, 14, 10);
 
+            // Left wall coordinate at -119, sign center sits around z = -20
             for (let i = 0; i < 40; i++) {
+                let side = i % 4;
+                let posOffset = (Math.random() - 0.5) * 225;
+                
+                // CRITICAL FIX: If the tree falls on the west side (side == 3) and lands right near the "Roblox Sucks" billboard space, skip spawning it
+                if (side === 3 && posOffset > -32 && posOffset < -8) {
+                    continue; 
+                }
+
                 const tree = new THREE.Group();
                 const tMesh = new THREE.Mesh(trunkGeo, trunkMat); tMesh.position.y = 8; tree.add(tMesh);
                 
@@ -607,8 +671,6 @@
                 const widthScale = 0.8 + Math.random() * 0.5;
                 tree.scale.set(widthScale, heightScale, widthScale);
                 
-                let side = i % 4;
-                let posOffset = (Math.random() - 0.5) * 225;
                 if (side === 0) tree.position.set(posOffset, 0, 114);
                 else if (side === 1) tree.position.set(posOffset, 0, -114);
                 else if (side === 2) tree.position.set(114, 0, posOffset);
@@ -762,6 +824,7 @@
                 currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
                 updateHUD();
             }
+            hazards.forEach(hole => hole.passed = false); // Reset clearing validation tracking states upon landing
         }
         
         function bailCombo() {
@@ -769,6 +832,7 @@
             document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
             setTimeout(() => { if(!isGameOver) document.getElementById('trick-text').innerText=""; }, 1200);
             updateHUD();
+            hazards.forEach(hole => hole.passed = false);
         }
         
         function updateHUD() {
@@ -795,6 +859,7 @@
             skaterRoot.rotation.set(0,0,0); boardGroup.rotation.set(0,0,0); skaterSkeleton.rotation.set(0,0,0);
             flipActive = false; backflipActive = false; treflipActive = false;
             isGrounded = true; isGrinding = false; ollieHold = false;
+            hazards.forEach(hole => hole.passed = false);
             document.getElementById('game-over-screen').style.display = "none";
             updateHUD();
         });
@@ -823,14 +888,13 @@
             else if (keys.s && !isGameOver) speed += (-0.22 - speed) * 0.08;
             else if (isGrounded) speed *= 0.95;
 
-            // Pre-calculate target step locations
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
             let nextZ = skaterRoot.position.z + speed * Math.cos(heading);
 
             let groundHeight = 0;
             let hitBarrier = false;
 
-            // --- LOCAL MATRIX PHYSICS ENGINE ---
+            // Process Active Obstacles
             obstacles.forEach(obs => {
                 let dx = nextX - obs.x;
                 let dz = nextZ - obs.z;
@@ -845,12 +909,10 @@
 
                 if (Math.abs(localX) < halfW && Math.abs(localZ) < halfD) {
                     let pct = (halfD - localZ) / obs.d;
-                    
                     if (pct >= 0.0 && pct <= 1.0) {
                         let slopeTargetY = pct * obs.h;
-                        
-                        if (skaterRoot.position.y >= slopeTargetY - 0.4) {
-                            if (pct > 0.92 && skaterRoot.position.y < obs.h - 0.5) {
+                        if (skaterRoot.position.y >= slopeTargetY - 0.5) {
+                            if (pct > 0.95 && skaterRoot.position.y < obs.h - 0.2) {
                                 hitBarrier = true;
                             } else {
                                 groundHeight = slopeTargetY;
@@ -858,8 +920,41 @@
                         } else {
                             hitBarrier = true;
                         }
-                    } else {
+                    }
+                }
+            });
+
+            // Process Trash Can Solid Collisions
+            solidProps.forEach(prop => {
+                let dx = nextX - prop.x;
+                let dz = nextZ - prop.z;
+                let dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < prop.radius) {
+                    if (skaterRoot.position.y < prop.height) {
                         hitBarrier = true;
+                        if (!isGrounded || Math.abs(speed) > 0.1) {
+                            bailCombo(); 
+                        }
+                    }
+                }
+            });
+
+            // Process Floor Hole Hazards & Air Gaps
+            hazards.forEach(hole => {
+                let dx = nextX - hole.x;
+                let dz = nextZ - hole.z;
+                let dist = Math.sqrt(dx * dx + dz * dz);
+                
+                if (dist < hole.radius) {
+                    if (isGrounded && !isGrinding && skaterRoot.position.y <= 0.05) {
+                        isGrounded = false;
+                        yVelocity = -0.25; 
+                        bailCombo();
+                    } 
+                    // GAP REWARD CRITERIA: If the player flies directly over the hole successfully while airborne
+                    else if (!isGrounded && yVelocity !== 0 && !hole.passed && skaterRoot.position.y > 0.1) {
+                        hole.passed = true;
+                        registerTrick("GAP JUMP", 250); // Instantly appends +250 points to the ongoing combo stream
                     }
                 }
             });
@@ -868,14 +963,22 @@
                 skaterRoot.position.x = nextX;
                 skaterRoot.position.z = nextZ;
             } else if (hitBarrier) {
-                speed *= -0.4; // Bounce skater backward out of mesh boundaries safely
+                speed *= -0.4; 
             }
 
-            // Outer Arena Limits
+            // Outer Arena Boundary Constraints
             if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
             if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
             if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
+
+            // Hole Plunge Respawn Fallback Routine
+            if (!isGrounded && skaterRoot.position.y < -6) {
+                skaterRoot.position.set(0, 4, 40); 
+                yVelocity = 0;
+                isGrounded = true;
+                speed = 0;
+            }
 
             // Aerial Transformations
             if (flipActive) {
@@ -899,7 +1002,7 @@
             else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
 
             // Grind rail alignment tracker
-            if (!isGrounded && yVelocity <= 0 && !isGrinding) {
+            if (!isGrounded && yVelocity <= 0 && !isGrinding && skaterRoot.position.y > -0.1) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
                     let cross = Math.abs((rail.end.z - rail.start.z)*pos.x - (rail.end.x - rail.start.x)*pos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
@@ -929,11 +1032,12 @@
                 }
             }
 
-            // Gravity updates
-            if (!isGrounded) {
+            // Gravity simulation updates
+            if (!isGrounded && !isGrinding) {
                 yVelocity -= 0.012;
                 skaterRoot.position.y += yVelocity;
-                if (skaterRoot.position.y <= groundHeight) {
+                
+                if (yVelocity < 0 && skaterRoot.position.y <= groundHeight && groundHeight >= 0) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
                     if(flipActive || backflipActive || treflipActive) { 
                         bailCombo(); 
