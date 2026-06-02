@@ -80,6 +80,45 @@
             font-weight: bold;
         }
 
+        /* --- Game Over Overlay Screen --- */
+        #game-over-screen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #fff;
+            text-shadow: 2px 2px #000;
+            z-index: 100;
+        }
+        #game-over-screen h1 {
+            font-size: 48px;
+            color: #f33;
+            margin-bottom: 10px;
+        }
+        #final-score-text {
+            font-size: 32px;
+            color: #ff0;
+            margin-bottom: 30px;
+        }
+        #btn-restart {
+            padding: 15px 35px;
+            font-size: 22px;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            background: #0c0;
+            color: #fff;
+            border: 3px solid #fff;
+            cursor: pointer;
+            text-shadow: 1px 1px #000;
+            box-shadow: 0 0 15px rgba(0,255,0,0.4);
+        }
+        #btn-restart:hover {
+            background: #0f0;
+        }
+
         /* --- Mobile Touch Controls --- */
         .mobile-btn {
             position: absolute;
@@ -97,6 +136,7 @@
             align-items: center;
             text-shadow: 1px 1px 3px #000;
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            z-index: 10;
         }
         #joystick-zone {
             bottom: 40px;
@@ -122,11 +162,19 @@
         }
         #btn-backflip {
             bottom: 135px;
-            right: 110px;
+            right: 105px;
             width: 65px;
             height: 65px;
             font-size: 10px;
             background: rgba(180, 0, 255, 0.35);
+        }
+        #btn-treflip {
+            bottom: 40px;
+            right: 135px;
+            width: 65px;
+            height: 65px;
+            font-size: 10px;
+            background: rgba(0, 180, 180, 0.35);
         }
     </style>
 </head>
@@ -147,10 +195,17 @@
         </div>
     </div>
 
+    <div id="game-over-screen">
+        <h1>TIME'S UP!</h1>
+        <div id="final-score-text">FINAL SCORE: 00000</div>
+        <button id="btn-restart">SKATE AGAIN?</button>
+    </div>
+
     <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
     <div id="btn-ollie" class="mobile-btn">OLLIE</div>
     <div id="btn-kickflip" class="mobile-btn">KICKFLIP</div>
     <div id="btn-backflip" class="mobile-btn">BACKFLIP</div>
+    <div id="btn-treflip" class="mobile-btn">360 FLIP</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
 
@@ -162,7 +217,7 @@
 
         // --- Game Setup Variables ---
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
-        let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
+        let activeTricks = [], timerSeconds = 120, isSpecialActive = false, isGameOver = false;
         let landingShake = 0;
         const particles = [];
 
@@ -286,7 +341,7 @@
 
         const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateDarkConcrete() });
         const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
-        const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture() });
+        const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture(), side: THREE.DoubleSide });
         const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
 
         // Ground Mesh
@@ -354,16 +409,27 @@
             const group = new THREE.Group();
             const geom = new THREE.BufferGeometry();
             
+            // Re-engineered vertex mapping matrix to seal the bottom, sides, and completely shut the back walls
             const vertices = new Float32Array([
+                // Front Incline Slope Plane
                 -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
                  w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
+                // Left Side Structural Triangle Panel
                 -w/2, 0,  d/2,  -w/2, h, -d/2,   -w/2, 0, -d/2,  
+                // Right Side Structural Triangle Panel
                  w/2, 0,  d/2,   w/2, 0, -d/2,    w/2, h, -d/2,  
+                // Rear Solid Wall Back Panel Closing 
+                -w/2, h, -d/2,   w/2, 0, -d/2,   -w/2, 0, -d/2,
                 -w/2, h, -d/2,   w/2, h, -d/2,    w/2, 0, -d/2
             ]);
             geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
             geom.computeVertexNormals();
-            const uvs = new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1, 0,0, 1,1, 0,1, 0,0, 1,0, 1,1, 0,1, 1,1, 1,0]);
+            
+            const uvs = new Float32Array([
+                0,0, 1,0, 0,1,  1,0, 1,1, 0,1,
+                0,0, 1,1, 0,1,  0,0, 1,0, 1,1,
+                0,1, 1,0, 0,0,  0,1, 1,1, 1,0
+            ]);
             geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 
             const mesh = new THREE.Mesh(geom, rampMaterial);
@@ -390,7 +456,7 @@
             rails.push({ start: start, end: end, height: h });
         }
 
-        // Layout Config: Exactly 6 Ramps & 2 Massive Side Rails
+        // Layout Config: Exactly 6 Solid Ramps & 2 Massive Side Rails
         addRamp(24, 8.5, 16, 0, -65, 0);       
         addRamp(24, 8.5, 16, 0, 65, Math.PI);  
         addRamp(18, 5.0, 12, -60, 0, Math.PI / 2);
@@ -483,31 +549,18 @@
         }
         spawnSkaterNPCs();
 
-        // --- Benches Asset Lineup ---
-        function addParkBenches() {
-            const benchMat = new THREE.MeshLambertMaterial({color: 0x8b5a2b});
-            for(let i=0; i<12; i++){
-                const bench = new THREE.Mesh(new THREE.BoxGeometry(3,0.3,1), benchMat);
-                bench.position.set((Math.random()-0.5)*180, 0.15, (Math.random()-0.5)*180);
-                scene.add(bench);
-            }
-        }
-        addParkBenches();
-
-        // --- Fixed: Giant Perimeter Boundary Trees (None in Center) ---
+        // --- Fence Boundary Trees ---
         function addMassiveFenceTrees() {
             const trunkGeo = new THREE.CylinderGeometry(0.9, 1.3, 16, 12);
             const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2f1b });
             const leafGeo = new THREE.ConeGeometry(5.5, 14, 10);
             const leafMat = new THREE.MeshLambertMaterial({ color: 0x134f13 });
 
-            // Spawn loop tightly framing inner perimeter fence line boundaries
             for (let i = 0; i < 35; i++) {
                 const tree = new THREE.Group();
                 const tMesh = new THREE.Mesh(trunkGeo, trunkMat); tMesh.position.y = 8; tree.add(tMesh);
                 const lMesh = new THREE.Mesh(leafGeo, leafMat); lMesh.position.y = 17; tree.add(lMesh);
                 
-                // Position vectors along boundaries
                 let side = i % 4;
                 let posOffset = (Math.random() - 0.5) * 220;
                 if (side === 0) tree.position.set(posOffset, 0, 114);
@@ -542,12 +595,17 @@
         // --- Simulation Variable Mechanics ---
         let speed = 0, heading = 0, yVelocity = 0;
         let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
-        let flipActive = false, flipProgress = 0, touchSteerDirection = 0;
-        let backflipActive = false, backflipProgress = 0;
+        let touchSteerDirection = 0;
 
-        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, b:false };
+        // Aerial Trick Engine Trackers
+        let flipActive = false, flipProgress = 0;
+        let backflipActive = false, backflipProgress = 0;
+        let treflipActive = false, treflipProgress = 0;
+
+        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, b:false, tre:false };
 
         window.addEventListener('keydown', e => {
+            if(isGameOver) return;
             initAudio();
             if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
             if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
@@ -556,6 +614,7 @@
             if(e.key===' ') { keys.space = true; if(isGrounded) ollieHold = true; }
             if(e.key==='Shift') keys.shift = true;
             if(e.key==='b' || e.key==='B') { keys.b = true; triggerBackflipAction(); }
+            if(e.key==='3') { keys.tre = true; triggerTreflipAction(); }
         });
         window.addEventListener('keyup', e => {
             if(e.key==='w' || e.key==='ArrowUp') keys.w = false;
@@ -565,27 +624,29 @@
             if(e.key===' ') { keys.space = false; triggerOllieRelease(); }
             if(e.key==='Shift') keys.shift = false;
             if(e.key==='b' || e.key==='B') keys.b = false;
+            if(e.key==='3') keys.tre = false;
         });
 
-        // Mobile Controllers Overlay Listeners
+        // Mobile Handlers
         const joyZone = document.getElementById('joystick-zone');
         joyZone.addEventListener('touchstart', e => {
+            if(isGameOver) return;
             initAudio();
             const rect = joyZone.getBoundingClientRect();
             touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
         }, {passive: true});
         joyZone.addEventListener('touchmove', e => {
+            if(isGameOver) return;
             const rect = joyZone.getBoundingClientRect();
             touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
         }, {passive: true});
         joyZone.addEventListener('touchend', () => { touchSteerDirection = 0; });
 
-        const oBtn = document.getElementById('btn-ollie');
-        oBtn.addEventListener('touchstart', () => { initAudio(); if(isGrounded) ollieHold = true; }, {passive: true});
-        oBtn.addEventListener('touchend', () => { triggerOllieRelease(); }, {passive: true});
-
-        document.getElementById('btn-kickflip').addEventListener('touchstart', () => { initAudio(); triggerKickflipAction(); }, {passive: true});
-        document.getElementById('btn-backflip').addEventListener('touchstart', () => { initAudio(); triggerBackflipAction(); }, {passive: true});
+        document.getElementById('btn-ollie').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); if(isGrounded) ollieHold = true; } }, {passive: true});
+        document.getElementById('btn-ollie').addEventListener('touchend', () => { if(!isGameOver) triggerOllieRelease(); }, {passive: true});
+        document.getElementById('btn-kickflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerKickflipAction(); } }, {passive: true});
+        document.getElementById('btn-backflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerBackflipAction(); } }, {passive: true});
+        document.getElementById('btn-treflip').addEventListener('touchstart', () => { if(!isGameOver) { initAudio(); triggerTreflipAction(); } }, {passive: true});
 
         function triggerOllieRelease() {
             if(isGrounded && ollieHold) {
@@ -598,7 +659,7 @@
         }
 
         function triggerKickflipAction() {
-            if (!isGrounded && !flipActive) {
+            if (!isGrounded && !flipActive && !treflipActive) {
                 flipActive = true; flipProgress = 0;
                 playFlipSound();
                 registerTrick("KICKFLIP", 300);
@@ -610,6 +671,14 @@
                 backflipActive = true; backflipProgress = 0;
                 playFlipSound();
                 registerTrick("BACKFLIP", 500);
+            }
+        }
+
+        function triggerTreflipAction() {
+            if (!isGrounded && !treflipActive && !flipActive) {
+                treflipActive = true; treflipProgress = 0;
+                playFlipSound();
+                registerTrick("360 FLIP", 700);
             }
         }
 
@@ -626,7 +695,7 @@
                 totalScore += (currentComboPoints * currentComboMultiplier);
                 if(!isSpecialActive) {
                     specialMeter = Math.min(100, specialMeter + (currentComboMultiplier * 12));
-                    if(specialMeter >= 100) { isSpecialActive = true; specialTimer = 10.0; }
+                    if(specialMeter >= 100) { isSpecialActive = true; }
                 }
                 currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
                 updateHUD();
@@ -635,7 +704,7 @@
         function bailCombo() {
             currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
             document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
-            setTimeout(() => { document.getElementById('trick-text').innerText=""; }, 1200);
+            setTimeout(() => { if(!isGameOver) document.getElementById('trick-text').innerText=""; }, 1200);
             updateHUD();
         }
         function updateHUD() {
@@ -648,26 +717,63 @@
             }
         }
 
+        // --- End of Game Reset State Router ---
+        function triggerGameOver() {
+            isGameOver = true;
+            stopGrindSound();
+            speed = 0; yVelocity = 0;
+            document.getElementById('final-score-text').innerText = "FINAL SCORE: " + Math.floor(totalScore).toString().padStart(5,'0');
+            document.getElementById('game-over-screen').style.display = "flex";
+        }
+
+        document.getElementById('btn-restart').addEventListener('click', () => {
+            totalScore = 0;
+            currentComboPoints = 0;
+            currentComboMultiplier = 0;
+            specialMeter = 20;
+            activeTricks = [];
+            timerSeconds = 120;
+            isSpecialActive = false;
+            isGameOver = false;
+            
+            skaterRoot.position.set(0, 0, 40);
+            heading = 0;
+            skaterRoot.rotation.set(0,0,0);
+            boardGroup.rotation.set(0,0,0);
+            skaterSkeleton.rotation.set(0,0,0);
+            
+            flipActive = false; backflipActive = false; treflipActive = false;
+            isGrounded = true; isGrinding = false; ollieHold = false;
+            
+            document.getElementById('game-over-screen').style.display = "none";
+            updateHUD();
+        });
+
         // --- Main Simulation Engine Loops ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // Time Tracking
-            timerSeconds -= (1/60);
-            if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
+            if (!isGameOver) {
+                timerSeconds -= (1/60);
+                if(timerSeconds <= 0) {
+                    timerSeconds = 0;
+                    triggerGameOver();
+                }
+            }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            if (keys.a || touchSteerDirection === -1) heading += 0.046;
-            if (keys.d || touchSteerDirection === 1) heading -= 0.046;
+            if (!isGameOver) {
+                if (keys.a || touchSteerDirection === -1) heading += 0.046;
+                if (keys.d || touchSteerDirection === 1) heading -= 0.046;
+            }
             skaterRoot.rotation.y = heading;
 
             let maxSpd = isSpecialActive ? 0.95 : 0.46;
             let acc = isSpecialActive ? 0.08 : 0.05;
-            let driving = keys.w || isMobile;
+            let driving = (!isGameOver && (keys.w || isMobile));
 
-            // Fixed Ramp Speed: maintain momentum logic during uphill drive conditions
             if (driving && !ollieHold) speed += (maxSpd - speed) * acc;
-            else if (keys.s) speed += (-0.22 - speed) * 0.08;
+            else if (keys.s && !isGameOver) speed += (-0.22 - speed) * 0.08;
             else if (isGrounded) speed *= 0.95;
 
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
@@ -687,7 +793,6 @@
                     let approachRatio = (obs.d/2 - rz) / obs.d; 
                     if(approachRatio >= 0.0 && approachRatio <= 1.0) {
                         let calculateSlopeHeight = approachRatio * obs.h;
-                        // Fixed deceleration trigger: increased check leeway so it rides cleanly up rather than colliding
                         if (skaterRoot.position.y >= calculateSlopeHeight - 0.8) {
                             groundHeight = calculateSlopeHeight;
                         } else {
@@ -712,7 +817,7 @@
             if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
             if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
 
-            if (keys.shift) triggerKickflipAction();
+            if (keys.shift && !isGameOver) triggerKickflipAction();
             
             // Kickflip Rotation Transform
             if (flipActive) {
@@ -721,11 +826,23 @@
                 if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
             }
 
-            // Backflip Rotation Transform (Rotates on X-axis)
+            // Backflip Rotation Transform (Rotates skeleton on X-axis)
             if (backflipActive) {
                 backflipProgress += 0.22;
                 skaterSkeleton.rotation.x = -backflipProgress;
                 if (backflipProgress >= Math.PI * 2) { skaterSkeleton.rotation.x = 0; backflipActive = false; }
+            }
+
+            // 360 Treflip Rotation Transform (Spin on Y and roll on Z simultaneously)
+            if (treflipActive) {
+                treflipProgress += 0.25;
+                boardGroup.rotation.y = treflipProgress * 2; // Full 360 Shuvit spin
+                boardGroup.rotation.z = treflipProgress;     // Barrel kickflip roll
+                if (treflipProgress >= Math.PI * 2) {
+                    boardGroup.rotation.y = 0;
+                    boardGroup.rotation.z = 0;
+                    treflipActive = false;
+                }
             }
 
             if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
@@ -741,14 +858,16 @@
                             isGrinding = true; isGrounded = true;
                             skaterRoot.position.y = rail.height; yVelocity = 0;
                             heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
-                            startGrindSound();
+                            if(!isGameOver) startGrindSound();
                         }
                     }
                 });
             }
 
             if (isGrinding) {
-                registerTrick("50-50 GRIND", 400); currentComboPoints += 4; updateHUD();
+                if(!isGameOver) {
+                    registerTrick("50-50 GRIND", 400); currentComboPoints += 4; updateHUD();
+                }
                 skaterRoot.position.x += 0.32 * Math.sin(heading);
                 skaterRoot.position.z += 0.32 * Math.cos(heading);
                 
@@ -756,9 +875,9 @@
                 rails.forEach(rail => {
                     if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) stillOn = true;
                 });
-                if(!stillOn || keys.space) {
+                if(!stillOn || keys.space || isGameOver) {
                     isGrinding = false; isGrounded = false; stopGrindSound();
-                    if(keys.space) yVelocity = 0.22;
+                    if(keys.space && !isGameOver) yVelocity = 0.22;
                 }
             }
 
@@ -768,10 +887,10 @@
                 skaterRoot.position.y += yVelocity;
                 if (skaterRoot.position.y <= groundHeight) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
-                    if(flipActive || backflipActive) { 
+                    if(flipActive || backflipActive || treflipActive) { 
                         bailCombo(); 
-                        boardGroup.rotation.z = 0; skaterSkeleton.rotation.x = 0;
-                        flipActive = false; backflipActive = false;
+                        boardGroup.rotation.set(0,0,0); skaterSkeleton.rotation.set(0,0,0);
+                        flipActive = false; backflipActive = false; treflipActive = false;
                     } else {
                         landingShake = 0.4;
                         spawnLandingParticles(skaterRoot.position.x, skaterRoot.position.y, skaterRoot.position.z);
