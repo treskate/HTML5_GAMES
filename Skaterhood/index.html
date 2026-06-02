@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Big Nick's Skatepark</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #87CEEB;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+        }
+
+        /* --- HUD Layout --- */
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            color: #fff;
+            text-shadow: 2px 2px #000;
+            pointer-events: none;
+            box-sizing: border-box;
+        }
+        #top-left-hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
+        #score-value {
+            color: #ff0;
+            font-weight: bold;
+            font-size: 26px;
+        }
+        #special-bar-container {
+            width: 200px;
+            height: 14px;
+            border: 2px solid #222;
+            background-color: #111;
+            margin-top: 5px;
+            position: relative;
+        }
+        #special-bar-fill {
+            height: 100%;
+            background-color: #0f0;
+            width: 0%;
+        }
+        #special-text {
+            position: absolute;
+            top: -2px;
+            left: 6px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        #top-right-hud {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 32px;
+            color: #f33;
+            font-weight: bold;
+        }
+        #bottom-center-hud {
+            position: absolute;
+            bottom: 120px;
+            width: 100%;
+            text-align: center;
+        }
+        #trick-text {
+            font-size: 24px;
+            color: #00ffcc;
+            font-weight: bold;
+        }
+
+        /* --- Mobile Touch Controls --- */
+        .mobile-btn {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.25);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            color: #fff;
+            text-align: center;
+            font-weight: bold;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            text-shadow: 1px 1px 3px #000;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+        #joystick-zone {
+            bottom: 40px;
+            left: 40px;
+            width: 110px;
+            height: 110px;
+        }
+        #btn-ollie {
+            bottom: 50px;
+            right: 40px;
+            width: 85px;
+            height: 85px;
+            font-size: 16px;
+            background: rgba(0, 200, 0, 0.3);
+        }
+        #btn-kickflip {
+            bottom: 145px;
+            right: 55px;
+            width: 65px;
+            height: 65px;
+            font-size: 12px;
+            background: rgba(0, 100, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="top-left-hud">
+            <div>SCORE</div>
+            <div id="score-value">00000</div>
+            <div id="special-bar-container">
+                <div id="special-bar-fill"></div>
+                <span id="special-text">SPECIAL</span>
+            </div>
+        </div>
+        <div id="top-right-hud">2:00</div>
+        <div id="bottom-center-hud">
+            <div id="trick-text"></div>
+        </div>
+    </div>
+
+    <div id="joystick-zone" class="mobile-btn">◄ STEER ►</div>
+    <div id="btn-ollie" class="mobile-btn">OLLIE</div>
+    <div id="btn-kickflip" class="mobile-btn">FLIP</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.137.0/build/three.min.js"></script>
+
+    <script>
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if(isMobile) {
+            document.querySelectorAll('.mobile-btn').forEach(el => el.style.display = 'flex');
+        }
+
+        // --- Game Setup Variables ---
+        let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0, specialMeter = 20;
+        let activeTricks = [], timerSeconds = 120, isSpecialActive = false, specialTimer = 0;
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.004);
+        scene.background = new THREE.Color(0x87CEEB);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        // --- Audio Engine ---
+        let audioCtx = null;
+        let grindNoiseNode = null;
+        let grindGainNode = null;
+
+        function initAudio() {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+        }
+
+        function playJumpSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(130, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(380, audioCtx.currentTime + 0.12);
+            gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.12);
+        }
+
+        function playFlipSound() {
+            if(!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(450, audioCtx.currentTime);
+            osc.frequency.linearRampToValueAtTime(220, audioCtx.currentTime + 0.18);
+            gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.18);
+        }
+
+        function startGrindSound() {
+            if (!audioCtx || grindNoiseNode) return;
+            const bufferSize = audioCtx.sampleRate * 1;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+            
+            grindNoiseNode = audioCtx.createBufferSource();
+            grindNoiseNode.buffer = buffer;
+            grindNoiseNode.loop = true;
+            
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 550;
+            
+            grindGainNode = audioCtx.createGain();
+            grindGainNode.gain.setValueAtTime(0.18, audioCtx.currentTime);
+            
+            grindNoiseNode.connect(filter);
+            filter.connect(grindGainNode);
+            grindGainNode.connect(audioCtx.destination);
+            grindNoiseNode.start();
+        }
+
+        function stopGrindSound() {
+            if (grindNoiseNode) {
+                grindNoiseNode.stop(); grindNoiseNode.disconnect();
+                grindGainNode.disconnect(); grindNoiseNode = null; grindGainNode = null;
+            }
+        }
+
+        // --- Lights ---
+        scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+        const sunLight = new THREE.DirectionalLight(0xfffaed, 0.85);
+        sunLight.position.set(60, 100, 40);
+        sunLight.castShadow = true;
+        scene.add(sunLight);
+
+        // --- Environmental Textures ---
+        function generateDarkConcrete() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#3c3c3c'; ctx.fillRect(0,0,128,128);
+            ctx.fillStyle = '#2b2b2b';
+            for(let i=0; i<500; i++) ctx.fillRect(Math.random()*128, Math.random()*128, 1.5, 1.5);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(60, 60);
+            return tex;
+        }
+
+        function generateWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#513829'; ctx.fillRect(0,0,64,64);
+            ctx.fillStyle = '#3d2a1e';
+            for(let i=0; i<64; i+=16) ctx.fillRect(i, 0, 2, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function generateRampTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64; canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#cd9a62'; ctx.fillRect(0,0,64,64);
+            ctx.fillStyle = '#b38450';
+            for(let i=0; i<64; i+=8) ctx.fillRect(0, i, 64, 1);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        const concreteMaterial = new THREE.MeshLambertMaterial({ map: generateDarkConcrete() });
+        const woodMaterial = new THREE.MeshLambertMaterial({ map: generateWoodTexture() });
+        const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture() });
+        const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
+
+        // Ground Mesh
+        const ground = new THREE.Mesh(new THREE.PlaneGeometry(250, 250), concreteMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Perimeter Wooden Fence
+        const fenceGroup = new THREE.Group();
+        function createWoodFence(w, h, x, z, rotY) {
+            const wall = new THREE.Group();
+            for(let i = -w/2; i <= w/2; i += 1.6) {
+                const plank = new THREE.Mesh(new THREE.BoxGeometry(1.4, h, 0.12), woodMaterial);
+                plank.position.set(i, h/2, 0);
+                wall.add(plank);
+            }
+            const railGeo = new THREE.BoxGeometry(w, 0.4, 0.15);
+            const cross1 = new THREE.Mesh(railGeo, woodMaterial); cross1.position.set(0, h * 0.25, 0.08); wall.add(cross1);
+            const cross2 = cross1.clone(); cross2.position.y = h * 0.75; wall.add(cross2);
+            
+            wall.position.set(x, 0, z); wall.rotation.y = rotY;
+            fenceGroup.add(wall);
+        }
+        createWoodFence(240, 5.5, 0, 120, 0); createWoodFence(240, 5.5, 0, -120, 0);
+        createWoodFence(240, 5.5, 120, 0, Math.PI/2); createWoodFence(240, 5.5, -120, 0, Math.PI/2);
+        scene.add(fenceGroup);
+
+        // Background Neighborhood Houses
+        function addBackgroundHouses() {
+            const houseColors = [0xaa4433, 0x4466aa, 0x558855, 0xddaa44, 0x887766];
+            for (let i = 0; i < 20; i++) {
+                const house = new THREE.Group();
+                const w = 12 + Math.random() * 8;
+                const h = 8 + Math.random() * 5;
+                const d = 12 + Math.random() * 6;
+                
+                const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: houseColors[Math.floor(Math.random() * houseColors.length)] }));
+                base.position.y = h/2;
+                house.add(base);
+                
+                const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.75, 4, 4), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+                roof.position.y = h + 2;
+                roof.rotation.y = Math.PI/4;
+                house.add(roof);
+
+                let side = Math.floor(Math.random() * 4);
+                let dist = 135 + Math.random() * 20;
+                let spread = (Math.random() - 0.5) * 220;
+                if (side === 0) house.position.set(spread, 0, dist);
+                else if (side === 1) house.position.set(spread, 0, -dist);
+                else if (side === 2) house.position.set(dist, 0, spread);
+                else house.position.set(-dist, 0, spread);
+                
+                scene.add(house);
+            }
+        }
+        addBackgroundHouses();
+
+        // --- Obstacles Logic ---
+        const obstacles = [];
+        const rails = [];
+
+        function addRamp(w, h, d, x, z, rotY) {
+            const group = new THREE.Group();
+            const geom = new THREE.BufferGeometry();
+            
+            const vertices = new Float32Array([
+                -w/2, 0,  d/2,   w/2, 0,  d/2,   -w/2, h, -d/2,  
+                 w/2, 0,  d/2,   w/2, h, -d/2,   -w/2, h, -d/2,  
+                -w/2, 0,  d/2,  -w/2, h, -d/2,   -w/2, 0, -d/2,  
+                 w/2, 0,  d/2,   w/2, 0, -d/2,    w/2, h, -d/2,  
+                -w/2, h, -d/2,   w/2, h, -d/2,    w/2, 0, -d/2
+            ]);
+            geom.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            geom.computeVertexNormals();
+            const uvs = new Float32Array([0,0, 1,0, 0,1, 1,0, 1,1, 0,1, 0,0, 1,1, 0,1, 0,0, 1,0, 1,1, 0,1, 1,1, 1,0]);
+            geom.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+
+            const mesh = new THREE.Mesh(geom, rampMaterial);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            group.add(mesh);
+            group.position.set(x, 0, z); group.rotation.y = rotY;
+            scene.add(group);
+            
+            obstacles.push({ x: x, z: z, w: w, d: d, h: h, rotY: rotY });
+        }
+
+        function addHorizontalRail(startX, startZ, endX, endZ, h=1.2) {
+            const start = new THREE.Vector3(startX, h, startZ);
+            const end = new THREE.Vector3(endX, h, endZ);
+            const distance = start.distanceTo(end);
+            
+            const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, distance), railMaterial);
+            pipe.position.copy(start).add(end).multiplyScalar(0.5);
+            pipe.lookAt(end); pipe.rotation.x += Math.PI / 2;
+            scene.add(pipe);
+
+            const p1 = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, h), railMaterial); p1.position.set(startX, h/2, startZ); scene.add(p1);
+            const p2 = p1.clone(); p2.position.set(endX, h/2, endZ); scene.add(p2);
+            rails.push({ start: start, end: end, height: h });
+        }
+
+        // --- Layout Design: Exactly 6 Ramps & 2 Massive Side Rails ---
+        // 2 Very Large Ramps
+        addRamp(24, 8.5, 16, 0, -65, 0);       
+        addRamp(24, 8.5, 16, 0, 65, Math.PI);  
+
+        // 2 Medium Ramps
+        addRamp(18, 5.0, 12, -60, 0, Math.PI / 2);
+        addRamp(18, 5.0, 12, 60, 0, -Math.PI / 2);
+
+        // 2 Small Ramps
+        addRamp(14, 2.5, 8, -25, -35, Math.PI / 4);
+        addRamp(14, 2.5, 8, 25, 35, -Math.PI * 0.75);
+
+        // 2 Big Side Rails
+        addHorizontalRail(-80, -40, -80, 40, 1.3); // Massive Left Rail
+        addHorizontalRail(80, -40, 80, 40, 1.3);   // Massive Right Rail
+
+        // --- Hero Skater & Reverted Standard Flat Edge Skateboard ---
+        const skaterRoot = new THREE.Group();
+        const boardGroup = new THREE.Group(); skaterRoot.add(boardGroup);
+
+        // REVERTED: Clean Flat-Edge Rectangle Skateboard Deck
+        const deckMesh = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.10, 2.3), new THREE.MeshLambertMaterial({ color: 0x1a1a1a }));
+        deckMesh.position.y = 0.38; 
+        boardGroup.add(deckMesh);
+        
+        // Compact low-profile wheels setup under deck
+        const wheelGeo = new THREE.CylinderGeometry(0.18, 0.18, 0.14, 12);
+        const wheelMat = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+        const wOffset = [[-0.34, 0.75], [0.34, 0.75], [-0.34, -0.75], [0.34, -0.75]];
+        wOffset.forEach(pos => {
+            const wheel = new THREE.Mesh(wheelGeo, wheelMat);
+            wheel.position.set(pos[0], 0.18, pos[1]); wheel.rotation.z = Math.PI/2;
+            boardGroup.add(wheel);
+        });
+
+        // Player Rigging Stance Structure
+        const skaterSkeleton = new THREE.Group(); skaterSkeleton.position.y = 0.38; skaterRoot.add(skaterSkeleton);
+        const stanceGroup = new THREE.Group(); stanceGroup.rotation.y = Math.PI / 2; skaterSkeleton.add(stanceGroup);
+
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.75, 0.22), new THREE.MeshLambertMaterial({ color: 0x2244aa }));
+        leftLeg.position.set(-0.35, 0.38, 0); stanceGroup.add(leftLeg);
+        const rightLeg = leftLeg.clone(); rightLeg.position.x = 0.35; stanceGroup.add(rightLeg);
+
+        const torsoGroup = new THREE.Group(); torsoGroup.position.y = 0.75; stanceGroup.add(torsoGroup);
+        const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.0, 0.36), new THREE.MeshLambertMaterial({ color: 0xdd3333 })); shirt.position.y = 0.5; torsoGroup.add(shirt);
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.36, 0.36), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); head.position.y = 1.18; torsoGroup.add(head);
+
+        // VOLUMETRIC BROWN AFRO HAIR ASSET (REMOVED HAT)
+        const afroGroup = new THREE.Group(); afroGroup.position.set(0, 1.34, 0);
+        const afroCenter = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 12), new THREE.MeshLambertMaterial({ color: 0x5a3d28 }));
+        afroGroup.add(afroCenter);
+        // Add extra fluffy dimension textures to the afro geometry outline
+        const puffOffsets = [[0.12,0.1,0], [-0.12,0.1,0], [0,0.12,0.1], [0,0.12,-0.1], [0.1,-0.1,0.1]];
+        puffOffsets.forEach(o => {
+            const puff = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshLambertMaterial({ color: 0x5a3d28 }));
+            puff.position.set(o[0], o[1], o[2]);
+            afroGroup.add(puff);
+        });
+        torsoGroup.add(afroGroup);
+
+        const leftArmRoot = new THREE.Group(); leftArmRoot.position.set(-0.45, 0.85, 0); torsoGroup.add(leftArmRoot);
+        const leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.75, 0.18), new THREE.MeshLambertMaterial({ color: 0xffcc99 })); leftArm.position.y = -0.35; leftArmRoot.add(leftArm);
+        const rightArmRoot = new THREE.Group(); rightArmRoot.position.set(0.45, 0.85, 0); torsoGroup.add(rightArmRoot);
+        const rightArm = leftArm.clone(); rightArm.position.y = -0.35; rightArmRoot.add(rightArm);
+
+        skaterRoot.position.set(0, 0, 40);
+        scene.add(skaterRoot);
+
+        // --- Humanized Skater NPCs (Exactly 4 Full Human Skeletal Models) ---
+        const npcs = [];
+        const npcColors = [0x55aaee, 0xee55aa, 0x33cc66, 0xff9933];
+
+        function spawnSkaterNPCs() {
+            for (let i = 0; i < 4; i++) {
+                const npcSkater = new THREE.Group();
+                
+                // Full Deck Assembly
+                const nDeck = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 2.2), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+                nDeck.position.y = 0.2; npcSkater.add(nDeck);
+                
+                // Human Pose Skeleton Nodes Map
+                const nStance = new THREE.Group();
+                nStance.rotation.y = Math.PI / 2;
+                nStance.position.y = 0.2;
+                npcSkater.add(nStance);
+
+                const nLegL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), new THREE.MeshLambertMaterial({ color: 0x333333 }));
+                nLegL.position.set(-0.3, 0.35, 0); nStance.add(nLegL);
+                const nLegR = nLegL.clone(); nLegR.position.x = 0.3; nStance.add(nLegR);
+
+                const nTorso = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.9, 0.35), new THREE.MeshLambertMaterial({ color: npcColors[i] }));
+                nTorso.position.y = 1.1; nStance.add(nTorso);
+
+                const nHead = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 10), new THREE.MeshLambertMaterial({ color: 0xffcc99 }));
+                nHead.position.y = 1.7; nStance.add(nHead);
+
+                // Distinctive hair sets to separate visual profiles
+                const nHair = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+                nHair.position.set(0, 1.8, -0.05); nStance.add(nHair);
+
+                npcSkater.position.set((Math.random() - 0.5) * 130, 0, (Math.random() - 0.5) * 130);
+                scene.add(npcSkater);
+                
+                npcs.push({ mesh: npcSkater, speed: 0.14 + Math.random() * 0.1, angle: Math.random() * Math.PI * 2 });
+            }
+        }
+        spawnSkaterNPCs();
+
+        // --- Controls Handling Engine ---
+        let speed = 0, heading = 0, yVelocity = 0;
+        let isGrounded = true, isGrinding = false, ollieHold = false, crouchAmt = 0;
+        let flipActive = false, flipProgress = 0, touchSteerDirection = 0;
+
+        const keys = { w:false, a:false, s:false, d:false, space:false, shift:false };
+
+        window.addEventListener('keydown', e => {
+            initAudio();
+            if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
+            if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
+            if(e.key==='s' || e.key==='ArrowDown') keys.s = true;
+            if(e.key==='d' || e.key==='ArrowRight') keys.d = true;
+            if(e.key===' ') { keys.space = true; if(isGrounded) ollieHold = true; }
+            if(e.key==='Shift') keys.shift = true;
+        });
+        window.addEventListener('keyup', e => {
+            if(e.key==='w' || e.key==='ArrowUp') keys.w = false;
+            if(e.key==='a' || e.key==='ArrowLeft') keys.a = false;
+            if(e.key==='s' || e.key==='ArrowDown') keys.s = false;
+            if(e.key==='d' || e.key==='ArrowRight') keys.d = false;
+            if(e.key===' ') { keys.space = false; triggerOllieRelease(); }
+            if(e.key==='Shift') keys.shift = false;
+        });
+
+        // Mobile Screen Overlay Mapping Listeners
+        const joyZone = document.getElementById('joystick-zone');
+        joyZone.addEventListener('touchstart', e => {
+            initAudio();
+            const rect = joyZone.getBoundingClientRect();
+            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
+        }, {passive: true});
+        joyZone.addEventListener('touchmove', e => {
+            const rect = joyZone.getBoundingClientRect();
+            touchSteerDirection = (e.touches[0].clientX < rect.left + rect.width/2) ? -1 : 1;
+        }, {passive: true});
+        joyZone.addEventListener('touchend', () => { touchSteerDirection = 0; });
+
+        const oBtn = document.getElementById('btn-ollie');
+        oBtn.addEventListener('touchstart', () => { initAudio(); if(isGrounded) ollieHold = true; }, {passive: true});
+        oBtn.addEventListener('touchend', () => { triggerOllieRelease(); }, {passive: true});
+
+        document.getElementById('btn-kickflip').addEventListener('touchstart', () => { initAudio(); triggerKickflipAction(); }, {passive: true});
+
+        function triggerOllieRelease() {
+            if(isGrounded && ollieHold) {
+                ollieHold = false;
+                yVelocity = 0.33 + (crouchAmt * 0.14);
+                isGrounded = false; isGrinding = false;
+                playJumpSound();
+                registerTrick("OLLIE", 50);
+            }
+        }
+
+        function triggerKickflipAction() {
+            if (!isGrounded && !flipActive) {
+                flipActive = true; flipProgress = 0;
+                playFlipSound();
+                registerTrick("KICKFLIP", 300);
+            }
+        }
+
+        function registerTrick(name, pts) {
+            if(!activeTricks.includes(name)) {
+                activeTricks.push(name);
+                if(currentComboPoints === 0) { currentComboPoints = pts; currentComboMultiplier = 1; }
+                else { currentComboPoints += pts; currentComboMultiplier++; }
+                updateHUD();
+            }
+        }
+        function landCombo() {
+            if(currentComboPoints > 0) {
+                totalScore += (currentComboPoints * currentComboMultiplier);
+                if(!isSpecialActive) {
+                    specialMeter = Math.min(100, specialMeter + (currentComboMultiplier * 12));
+                    if(specialMeter >= 100) { isSpecialActive = true; specialTimer = 10.0; }
+                }
+                currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
+                updateHUD();
+            }
+        }
+        function bailCombo() {
+            currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
+            document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
+            setTimeout(() => { document.getElementById('trick-text').innerText=""; }, 1200);
+            updateHUD();
+        }
+        function updateHUD() {
+            document.getElementById('score-value').innerText = Math.floor(totalScore).toString().padStart(5,'0');
+            document.getElementById('special-bar-fill').style.width = specialMeter + '%';
+            if(currentComboPoints > 0) {
+                document.getElementById('trick-text').innerText = activeTricks.join(" + ") + ` ${currentComboPoints} x${currentComboMultiplier}`;
+            } else if(!document.getElementById('trick-text').innerText.includes("WIPEOUT")) {
+                document.getElementById('trick-text').innerText = "";
+            }
+        }
+
+        // --- Main Simulation Run Loops ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Time Tracking
+            timerSeconds -= (1/60);
+            if(timerSeconds <= 0) { timerSeconds = 120; totalScore = 0; }
+            document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
+
+            if (keys.a || touchSteerDirection === -1) heading += 0.046;
+            if (keys.d || touchSteerDirection === 1) heading -= 0.046;
+            skaterRoot.rotation.y = heading;
+
+            let maxSpd = isSpecialActive ? 0.95 : 0.46;
+            let acc = isSpecialActive ? 0.08 : 0.05;
+            let driving = keys.w || isMobile;
+
+            if (driving && isGrounded && !ollieHold) speed += (maxSpd - speed) * acc;
+            else if (keys.s && isGrounded) speed += (-0.22 - speed) * 0.08;
+            else if (isGrounded) speed *= 0.95;
+
+            let nextX = skaterRoot.position.x + speed * Math.sin(heading);
+            let nextZ = skaterRoot.position.z + speed * Math.cos(heading);
+
+            // --- Elevation Slope Calculations & Solid Barrier Checks ---
+            let groundHeight = 0;
+            let hitBarrier = false;
+
+            obstacles.forEach(obs => {
+                let dx = nextX - obs.x;
+                let dz = nextZ - obs.z;
+                let cos = Math.cos(-obs.rotY); let sin = Math.sin(-obs.rotY);
+                let rx = dx * cos - dz * sin;
+                let rz = dx * sin + dz * cos;
+
+                if (Math.abs(rx) < (obs.w/2) && Math.abs(rz) < (obs.d/2)) {
+                    let approachRatio = (obs.d/2 - rz) / obs.d; 
+                    if(approachRatio >= 0.0 && approachRatio <= 1.0) {
+                        let calculateSlopeHeight = approachRatio * obs.h;
+                        if (skaterRoot.position.y >= calculateSlopeHeight - 0.5) {
+                            groundHeight = calculateSlopeHeight;
+                        } else {
+                            hitBarrier = true;
+                        }
+                    } else {
+                        hitBarrier = true;
+                    }
+                }
+            });
+
+            if (!isGrinding && !hitBarrier) {
+                skaterRoot.position.x = nextX;
+                skaterRoot.position.z = nextZ;
+            } else if (hitBarrier) {
+                speed *= -0.35;
+            }
+
+            // Boundary limits
+            if (skaterRoot.position.x > 118) skaterRoot.position.x = 118;
+            if (skaterRoot.position.x < -118) skaterRoot.position.x = -118;
+            if (skaterRoot.position.z > 118) skaterRoot.position.z = 118;
+            if (skaterRoot.position.z < -118) skaterRoot.position.z = -118;
+
+            if (keys.shift) triggerKickflipAction();
+            if (flipActive) {
+                flipProgress += 0.35; boardGroup.rotation.z = flipProgress;
+                if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
+            }
+
+            if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
+            else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
+
+            // --- Rail Grinding Math Engine ---
+            if (!isGrounded && yVelocity <= 0 && !isGrinding) {
+                rails.forEach(rail => {
+                    const pos = skaterRoot.position;
+                    let cross = Math.abs((rail.end.z - rail.start.z)*pos.x - (rail.end.x - rail.start.x)*pos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
+                    if (cross < 1.2 && pos.y >= rail.height - 0.5 && pos.y <= rail.height + 0.8) {
+                        if(pos.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && pos.z <= Math.max(rail.start.z, rail.end.z) + 1.0) {
+                            isGrinding = true; isGrounded = true;
+                            skaterRoot.position.y = rail.height; yVelocity = 0;
+                            heading = Math.atan2(rail.end.x - rail.start.x, rail.end.z - rail.start.z);
+                            startGrindSound();
+                        }
+                    }
+                });
+            }
+
+            if (isGrinding) {
+                registerTrick("50-50 GRIND", 400); currentComboPoints += 4; updateHUD();
+                skaterRoot.position.x += 0.32 * Math.sin(heading);
+                skaterRoot.position.z += 0.32 * Math.cos(heading);
+                
+                let stillOn = false;
+                rails.forEach(rail => {
+                    if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) stillOn = true;
+                });
+                if(!stillOn || keys.space) {
+                    isGrinding = false; isGrounded = false; stopGrindSound();
+                    if(keys.space) yVelocity = 0.22;
+                }
+            }
+
+            // --- Gravity Logic ---
+            if (!isGrounded) {
+                yVelocity -= 0.012;
+                skaterRoot.position.y += yVelocity;
+                if (skaterRoot.position.y <= groundHeight) {
+                    skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
+                    if(flipActive) { bailCombo(); boardGroup.rotation.z = 0; flipActive = false; }
+                    else landCombo();
+                }
+            } else if (!isGrinding) {
+                skaterRoot.position.y = groundHeight;
+            }
+
+            // Other Skaters AI Cycles Run Tracking
+            npcs.forEach(npc => {
+                npc.mesh.position.x += npc.speed * Math.sin(npc.angle);
+                npc.mesh.position.z += npc.speed * Math.cos(npc.angle);
+                npc.mesh.rotation.y = npc.angle;
+                // Bounce loop internally away from outer fencing boundary lines
+                if(Math.abs(npc.mesh.position.x) > 114 || Math.abs(npc.mesh.position.z) > 114) {
+                    npc.angle += Math.PI * (0.5 + Math.random() * 0.5);
+                }
+            });
+
+            // Posture Nodes Animations
+            leftLeg.position.y = 0.38 - (crouchAmt * 0.7);
+            rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
+            torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
+
+            // Camera Tracking Follow Lerp Target Calculations
+            const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
+            const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
+            camera.position.lerp(worldOffset, 0.12);
+            camera.lookAt(new THREE.Vector3(skaterRoot.position.x, skaterRoot.position.y + 1.0, skaterRoot.position.z));
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
