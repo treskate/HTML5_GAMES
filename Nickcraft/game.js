@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. PROCEDURAL TEXTURE & AUDIO ENGINE
+// 0. TEXTURE & AUDIO GENERATOR
 // =========================================================================
 let audioCtx = null;
 
@@ -39,41 +39,34 @@ function playSound(type) {
     }
 }
 
-// Generates a 16x16 block texture using canvas math code
 function createVoxelTexture(baseColor, noiseColor, style) {
     const canvas = document.createElement('canvas');
-    canvas.width = 16;
-    canvas.height = 16;
+    canvas.width = 16; canvas.height = 16;
     const ctx = canvas.getContext('2d');
-    
     ctx.fillStyle = baseColor;
     ctx.fillRect(0, 0, 16, 16);
-    
     ctx.fillStyle = noiseColor;
     for (let i = 0; i < 16; i++) {
         for (let j = 0; j < 16; j++) {
             if (style === 'wood' && i % 4 === 0) {
-                // Vertical rings lines for wood grain texture
                 ctx.fillRect(i, j, 1, 1);
             } else if (Math.random() > 0.6) {
-                // Standard noise speckles for grass/stone/dirt
                 ctx.fillRect(i, j, 1, 1);
             }
         }
     }
-    
     const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter; // Sharp classic pixelated texture lookup
+    texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     return texture;
 }
 
 // =========================================================================
-// 1. ENGINE SETUP & WORLD CONSTANTS
+// 1. ENGINE SETUP
 // =========================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.02); 
+scene.fog = new THREE.FogExp2(0x87CEEB, 0x02);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -89,13 +82,13 @@ directionalLight.castShadow = true;
 scene.add(directionalLight);
 
 // =========================================================================
-// 2. MATERIALS SETUP (GENERATING TEXTURES)
+// 2. MATERIALS
 // =========================================================================
 const materials = {
     grass: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#557a2b', '#3f5e1f', 'noise') }),
     dirt: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#866043', '#66462c', 'noise') }),
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
-    wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), // Beautiful procedural Light Orange Wood Grain
+    wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
     logo: new THREE.MeshStandardMaterial({ color: 0xd946ef })
 };
@@ -122,13 +115,11 @@ function clearCurrentWorld() {
 }
 
 // =========================================================================
-// 3. GENERATION LAYOUT (TREES & LOGO SIGN)
+// 3. LOGO & TREES
 // =========================================================================
 function spawnTree(trunkX, trunkZ) {
     const baseY = 3; 
-    for (let h = 0; h < 4; h++) {
-        createBlock(trunkX, baseY + h, trunkZ, 'wood'); // Spawns wood block properly
-    }
+    for (let h = 0; h < 4; h++) createBlock(trunkX, baseY + h, trunkZ, 'wood');
     const leafHeight = baseY + 3;
     for (let lx = -1; lx <= 1; lx++) {
         for (let lz = -1; lz <= 1; lz++) {
@@ -179,41 +170,74 @@ function generateDefaultWorld() {
 generateDefaultWorld();
 
 // =========================================================================
-// 4. MOBILE INVERTED LOOK & TOUCH HANDLERS
+// 4. NATURAL UN-INVERTED TOUCH & CLICK LOOK ENGINE
 // =========================================================================
-const keys = { w: false };
+let isMovingForward = false;
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-let lastTouchX = 0, lastTouchY = 0;
+let lastTrackX = 0, lastTrackY = 0;
+let isDraggingCamera = false;
 
-document.addEventListener('touchstart', (e) => {
-    initAudio(); 
-    if (e.target.closest('#menu') || e.target.closest('.touch-zone')) return;
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
-}, { passive: true });
+// Unified tracking function handles finger drops and desktop mouse clicks
+function getEventCoords(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    return { x: e.clientX, y: e.clientY };
+}
 
-document.addEventListener('touchmove', (e) => {
+function startTracking(e) {
     if (e.target.closest('#menu') || e.target.closest('.touch-zone')) return;
-    const deltaX = e.touches[0].clientX - lastTouchX;
-    const deltaY = e.touches[0].clientY - lastTouchY;
+    initAudio();
+    isDraggingCamera = true;
+    const coords = getEventCoords(e);
+    lastTrackX = coords.x;
+    lastTrackY = coords.y;
+}
+
+function moveTracking(e) {
+    if (!isDraggingCamera) return;
+    const coords = getEventCoords(e);
+    const deltaX = coords.x - lastTrackX;
+    const deltaY = coords.y - lastTrackY;
     
-    lastTouchX = e.touches[0].clientX;
-    lastTouchY = e.touches[0].clientY;
+    lastTrackX = coords.x;
+    lastTrackY = coords.y;
 
-    const lookSpeed = 0.006;
+    const lookSpeed = 0.005;
     euler.setFromQuaternion(camera.quaternion);
     
-    // --- LOOK AXIS SETTINGS ---
-    euler.y += deltaX * lookSpeed; 
-    euler.x += deltaY * lookSpeed; // Fully inverted up/down camera tracking line!
+    // NATURAL TRACKING PATHWAY: Drag left -> Look Left. Drag Up -> Look Up.
+    euler.y -= deltaX * lookSpeed; 
+    euler.x -= deltaY * lookSpeed; 
     
     euler.x = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, euler.x));
     camera.quaternion.setFromEuler(euler);
-}, { passive: true });
+}
 
+function stopTracking() {
+    isDraggingCamera = false;
+}
+
+// Add Mobile Touch Listeners
+document.addEventListener('touchstart', startTracking, { passive: true });
+document.addEventListener('touchmove', moveTracking, { passive: true });
+document.addEventListener('touchend', stopTracking);
+
+// Add Desktop Mouse Click-Drag Listeners
+document.addEventListener('mousedown', startTracking);
+document.addEventListener('mousemove', moveTracking);
+document.addEventListener('mouseup', stopTracking);
+
+// Unified Button Events (Works for Touch and Mouse Click on Desktop)
 const movePad = document.getElementById('move-pad');
-movePad.addEventListener('touchstart', (e) => { e.preventDefault(); initAudio(); keys.w = true; });
-movePad.addEventListener('touchend', () => { keys.w = false; });
+function startMoving(e) { e.preventDefault(); initAudio(); isMovingForward = true; }
+function stopMoving() { isMovingForward = false; }
+
+movePad.addEventListener('touchstart', startMoving);
+movePad.addEventListener('touchend', stopMoving);
+movePad.addEventListener('mousedown', startMoving);
+movePad.addEventListener('mouseup', stopMoving);
+movePad.addEventListener('mouseleave', stopMoving);
 
 window.setBlockType = function(type) { 
     currentSelectedType = type; 
@@ -221,7 +245,7 @@ window.setBlockType = function(type) {
 };
 
 // =========================================================================
-// 5. BLOCK ACTION PLACEMENT HANDLERS
+// 5. UNIFIED ACTION PADS
 // =========================================================================
 const raycaster = new THREE.Raycaster();
 const screenCenter = new THREE.Vector2(0, 0);
@@ -232,7 +256,6 @@ function handleBlockAction(isPlacement) {
 
     if (intersects.length > 0 && intersects[0].distance < 10) { 
         const hitBlock = intersects[0].object;
-        
         if (!isPlacement) {
             playSound('break'); 
             scene.remove(hitBlock);
@@ -240,21 +263,30 @@ function handleBlockAction(isPlacement) {
         } else {
             playSound('place'); 
             const normal = intersects[0].face.normal;
-            const newX = Math.round(hitBlock.position.x + normal.x);
-            const newY = Math.round(hitBlock.position.y + normal.y);
-            const newZ = Math.round(hitBlock.position.z + normal.z);
-            
-            // CRITICAL FIX: Explicitly passes currentSelectedType variable here
-            createBlock(newX, newY, newZ, currentSelectedType);
+            createBlock(
+                Math.round(hitBlock.position.x + normal.x),
+                Math.round(hitBlock.position.y + normal.y),
+                Math.round(hitBlock.position.z + normal.z),
+                currentSelectedType
+            );
         }
     }
 }
 
-document.getElementById('mb-break').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
-document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
+// Connect layout element listeners across click/touch definitions
+const btnBreak = document.getElementById('mb-break');
+const btnPlace = document.getElementById('mb-place');
+
+btnBreak.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
+btnBreak.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
+
+btnPlace.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
+btnPlace.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
+
+window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 6. SAVE SYSTEM
+// 6. STORAGE MANAGERS
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui');
@@ -275,13 +307,13 @@ window.loadWorld = function() {
 };
 
 // =========================================================================
-// 7. LOOP
+// 7. RENDERING PIPELINE LOOP
 // =========================================================================
 const SPEED = 0.12; 
 
 function animate() {
     requestAnimationFrame(animate);
-    if (keys.w) {
+    if (isMovingForward) {
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         forward.y = 0; forward.normalize();
         camera.position.addScaledVector(forward, SPEED);
