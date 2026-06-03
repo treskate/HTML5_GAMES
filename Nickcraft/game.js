@@ -53,7 +53,7 @@ function playSound(type) {
 }
 
 // =========================================================================
-// 1. ENGINE INITIALIZATION & SYSTEM MAP SIZE (REVERTED TO 80 BLOCKS WIDE)
+// 1. ENGINE INITIALIZATION & RECONFIGURED MAP SIZE (70 BLOCKS WIDE)
 // =========================================================================
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -65,16 +65,16 @@ document.body.appendChild(renderer.domElement);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
-sunLight.position.set(80, 120, 40);
+sunLight.position.set(45, 90, 30);
 sunLight.castShadow = true;
 scene.add(sunLight);
 
-// Level reverted back to 80 blocks wide and long
-const WORLD_SIZE = 80; 
+// Level updated to 70 blocks wide and long
+const WORLD_SIZE = 70; 
 let worldTime = 0, currentDayFactor = 1.0; 
 
 function updateDayNightCycle() {
-    worldTime += 0.001; // Slower time step for longer day cycles
+    worldTime += 0.001; 
     currentDayFactor = (Math.sin(worldTime) + 1) / 2; 
     
     const skyColor = new THREE.Color(0x0a0d1a).lerp(new THREE.Color(0x87CEEB), currentDayFactor);
@@ -83,13 +83,12 @@ function updateDayNightCycle() {
     
     ambientLight.intensity = 0.15 + (currentDayFactor * 0.55);
     sunLight.intensity = currentDayFactor * 0.7;
-    sunLight.position.x = Math.cos(worldTime) * 100;
-    sunLight.position.y = Math.sin(worldTime) * 100;
+    sunLight.position.x = Math.cos(worldTime) * 60;
+    sunLight.position.y = Math.sin(worldTime) * 60;
 
     const nightIntensity = (1.0 - currentDayFactor) * 2.0;
     firepitsArray.forEach(f => { f.light.intensity = nightIntensity; });
 
-    // Spawn zombies at night, trigger daytime burn effects
     manageZombieSpawnsAndSunburns();
 }
 
@@ -166,9 +165,6 @@ function spawnBlockBreakParticles(x, y, z, colorHex) {
     }
 }
 
-// =========================================================================
-// 3. SPECIAL EFFECTS PROCESSOR
-// =========================================================================
 function spawnSmokeParticle(x, y, z, color = 0x9ca3af) {
     const geo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
     const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
@@ -221,7 +217,7 @@ function updateAxeAnimationLoop() {
 }
 
 // =========================================================================
-// 5. SIX DETAILED FIREPITS WITH SAFETY ZONES
+// 5. SEVEN FIREPITS WITH SAFETY ZONES
 // =========================================================================
 function buildFirepit(cx, cz) {
     const cy = getGroundYAt(cx, cz) + 1; const group = new THREE.Group();
@@ -262,15 +258,12 @@ function updateFirepitsLoop() {
 }
 
 // =========================================================================
-// 6. ZOMBIE NIGHT SPAWNS & FIREPIT REPELLENT ARTIFICIAL INTELLIGENCE
+// 6. ZOMBIE NIGHT SPAWNS & FIREPIT REPELLENT AI
 // =========================================================================
 function buildZombieMesh() {
     const group = new THREE.Group();
-    // Torso Shirt Block
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.4), materials.zombieShirt); body.position.y = 0.375; body.castShadow = true; group.add(body);
-    // Green Head Block
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), materials.zombieSkin); head.position.y = 0.975; head.castShadow = true; group.add(head);
-    // Extended Outstretched Arms
     const armGeo = new THREE.BoxGeometry(0.15, 0.15, 0.55);
     const leftArm = new THREE.Mesh(armGeo, materials.zombieSkin); leftArm.position.set(-0.35, 0.6, -0.2); leftArm.castShadow = true; group.add(leftArm);
     const rightArm = new THREE.Mesh(armGeo, materials.zombieSkin); rightArm.position.set(0.35, 0.6, -0.2); rightArm.castShadow = true; group.add(rightArm);
@@ -278,26 +271,23 @@ function buildZombieMesh() {
 }
 
 function manageZombieSpawnsAndSunburns() {
-    // Night is defined when currentDayFactor is below 0.35
     if (currentDayFactor < 0.35) {
-        if (activeZombies.length < 12 && Math.random() > 0.97) {
+        if (activeZombies.length < 8 && Math.random() > 0.97) {
             const rx = 10 + Math.random() * (WORLD_SIZE - 20);
             const rz = 10 + Math.random() * (WORLD_SIZE - 20);
-            // Check if coordinates are safe from firepit radius limits
             let safeFromFire = true;
-            firepitsArray.forEach(f => { if(Math.sqrt(Math.pow(rx-f.x,2)+Math.pow(rz-f.z,2)) < 15) safeFromFire = false; });
+            firepitsArray.forEach(f => { if(Math.sqrt(Math.pow(rx-f.x,2)+Math.pow(rz-f.z,2)) < 12) safeFromFire = false; });
             
             if (safeFromFire) {
                 const ry = getGroundYAt(rx, rz);
                 const zm = buildZombieMesh(); zm.position.set(rx, ry, rz); scene.add(zm);
-                activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 3, targetFlee: null });
+                activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 3 });
             }
         }
     } else {
-        // Daylight Burn Loop Process
         for (let i = activeZombies.length - 1; i >= 0; i--) {
             const z = activeZombies[i];
-            spawnSmokeParticle(z.mesh.position.x, z.mesh.position.y + 0.5, z.mesh.position.z, 0xff7700); // Orange/ash burning fire embers
+            spawnSmokeParticle(z.mesh.position.x, z.mesh.position.y + 0.5, z.mesh.position.z, 0xff7700);
             scene.remove(z.mesh);
             activeZombies.splice(i, 1);
         }
@@ -311,34 +301,30 @@ function updateZombiesLoop() {
         let dz = camera.position.z - z.mesh.position.z;
         let distanceToPlayer = Math.sqrt(dx*dx + dz*dz);
 
-        // Core Intelligence Routine: Flee from active firepit warmth radii
         let nearFirepit = null;
         firepitsArray.forEach(f => {
             let fdx = z.mesh.position.x - f.x;
             let fdz = z.mesh.position.z - f.z;
             let fDist = Math.sqrt(fdx*fdx + fdz*fdz);
-            if (fDist < 14) nearFirepit = f;
+            if (fDist < 12) nearFirepit = f;
         });
 
         if (nearFirepit) {
-            // Run completely opposite from firepit layout grid
             let fdx = z.mesh.position.x - nearFirepit.x;
             let fdz = z.mesh.position.z - nearFirepit.z;
             let angle = Math.atan2(fdz, fdx);
             z.mesh.position.x += Math.cos(angle) * ZOMBIE_SPEED * 1.3;
             z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED * 1.3;
             z.mesh.rotation.y = -angle + Math.PI/2;
-        } else if (distanceToPlayer < 32) {
-            // Chase the player
+        } else if (distanceToPlayer < 24) {
             let angle = Math.atan2(dz, dx);
             z.mesh.position.x += Math.cos(angle) * ZOMBIE_SPEED;
             z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED;
             z.mesh.rotation.y = -angle - Math.PI/2;
 
-            // Attack player trigger boundaries
             if (distanceToPlayer < 1.3 && Math.abs(camera.position.y - (z.mesh.position.y + 1)) < 1.5) {
                 playSound('hurt');
-                playerVelocityY = 0.06; // Knockback push force vertical bounce
+                playerVelocityY = 0.06; 
                 camera.position.x += Math.cos(angle) * 0.8;
                 camera.position.z += Math.sin(angle) * 0.8;
             }
@@ -351,13 +337,18 @@ function updateZombiesLoop() {
 }
 
 // =========================================================================
-// 7. COEXISTING PEACEFUL ANIMALS ENGINE
+// 7. SKY LOGO REMOVED IN FAVOR OF SCREEN UI HEADER
+// =========================================================================
+function generateSkyLogoText() { /* Deprecated and cleaned up for performance layout */ }
+
+// =========================================================================
+// 8. HUNTABLE PEACEFUL ANIMALS ENGINE WITH GHOST ASCENSION
 // =========================================================================
 const animalConfig = [
-    { type: 'horse', color: 0x5c2d17, size: [0.7, 0.8, 1.1], count: 3 },
-    { type: 'dog', color: 0xc2410c, size: [0.4, 0.45, 0.65], count: 4 },
-    { type: 'cat', color: 0xd97706, size: [0.3, 0.3, 0.45], count: 4 },
-    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.75], count: 6 }
+    { type: 'horse', color: 0x5c2d17, size: [0.7, 0.8, 1.1], count: 2 },
+    { type: 'dog', color: 0xc2410c, size: [0.4, 0.45, 0.65], count: 3 },
+    { type: 'cat', color: 0xd97706, size: [0.3, 0.3, 0.45], count: 3 },
+    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.75], count: 4 }
 ];
 function spawnAnimals() {
     animalConfig.forEach(cfg => {
@@ -366,21 +357,25 @@ function spawnAnimals() {
             const rz = Math.floor(10 + Math.random() * (WORLD_SIZE - 20));
             const ry = getGroundYAt(rx, rz) + (cfg.size[1]/2) + 0.5;
             const group = new THREE.Group();
-            const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.85 });
+            
+            // Allow material alpha updates for ghost animations later
+            const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.85, transparent: true, opacity: 1.0 });
             const body = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), bodyMat); body.castShadow = true; group.add(body);
+            
             const headSize = cfg.size[0] * 0.75;
             const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), bodyMat); head.position.set(0, cfg.size[1]*0.4, -cfg.size[2]*0.45); head.castShadow = true; group.add(head);
+            
             group.position.set(rx, ry, rz); scene.add(group);
-            activeAnimals.push({ mesh: group, type: cfg.type, colorHex: cfg.color, isGhost: false, ghostTimer: 0, moveTimer: Math.random() * 4, vx: 0, vz: 0, bY: cfg.size[1]/2 });
+            activeAnimals.push({ mesh: group, type: cfg.type, colorHex: cfg.color, isGhost: false, ghostTimer: 0, moveTimer: Math.random() * 4, vx: 0, vz: 0, bY: cfg.size[1]/2, hitpoints: 2 });
         }
     });
 }
 function updateAnimalsLoop() {
-    activeAnimals.forEach(a => {
+    activeAnimals.forEach((a, index) => {
         if (a.isGhost) {
-            a.mesh.position.y += 0.09; a.mesh.rotation.y += 0.05; a.ghostTimer += 0.016;
-            a.mesh.children.forEach(c => { if (c.material) c.material.opacity = Math.max(0, 1 - (a.ghostTimer / 1.4)); });
-            if (a.ghostTimer >= 1.4) { scene.remove(a.mesh); activeAnimals = activeAnimals.filter(item => item !== a); }
+            a.mesh.position.y += 0.06; a.mesh.rotation.y += 0.04; a.ghostTimer += 0.016;
+            a.mesh.children.forEach(c => { if (c.material) c.material.opacity = Math.max(0, 0.6 - (a.ghostTimer / 1.5)); });
+            if (a.ghostTimer >= 1.5) { scene.remove(a.mesh); activeAnimals.splice(index, 1); }
             return;
         }
         a.moveTimer -= 0.016;
@@ -397,7 +392,7 @@ function updateAnimalsLoop() {
 }
 
 // =========================================================================
-// 8. PROCEDURAL GENERATION: LANDSCAPES, POOLS, & FENCES
+// 9. PROCEDURAL GENERATION: LANDSCAPES, POOLS, & EDGE TREES
 // =========================================================================
 function spawnTree(trunkX, trunkZ, customHeight = 4) {
     const surfaceY = getGroundYAt(trunkX, trunkZ); const startY = surfaceY + 1;
@@ -408,31 +403,23 @@ function spawnTree(trunkX, trunkZ, customHeight = 4) {
 }
 
 function generateDefaultWorld() {
-    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
-    const hillCenterX = 30, hillCenterZ = 35;
+    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.012);
     
-    // Swimming Pool Location Configurations
-    const poolX = 45, poolZ = 50, poolRadius = 10;
+    // Configured Pool Center
+    const poolX = 45, poolZ = 45, poolRadius = 7;
 
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
-            const distToHill = Math.sqrt(Math.pow(x - hillCenterX, 2) + Math.pow(z - hillCenterZ, 2));
-            let hillHeight = 0; if (distToHill < 16) hillHeight = Math.round((16 - distToHill) * 0.5);
-            
             const distToPool = Math.sqrt(Math.pow(x - poolX, 2) + Math.pow(z - poolZ, 2));
             const isInsidePool = distToPool < poolRadius;
             const isPoolEdgeFenceLine = (Math.abs(distToPool - (poolRadius + 2)) < 0.6);
 
             createBlock(x, 0, z, 'stone');
             if (isInsidePool) {
-                // Dig a 2-block deep excavation for the pool water
                 createBlock(x, 1, z, 'stone'); 
                 createBlock(x, 2, z, 'water');
             } else {
                 createBlock(x, 1, z, 'dirt'); createBlock(x, 2, z, 'grass');
-                for (let h = 0; h < hillHeight; h++) createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
-                
-                // Construct a protective fence wrap entirely around the swimming pool perimeter
                 if (isPoolEdgeFenceLine && x % 2 === 0 && z % 2 === 0) {
                     createBlock(x, 3, z, 'fence');
                 }
@@ -440,26 +427,28 @@ function generateDefaultWorld() {
         }
     }
     
-    // Boundary perimeter map fence posts
+    // Boundary fence borders
     for (let i = 0; i < WORLD_SIZE; i++) {
         createBlock(i, getGroundYAt(i, 0) + 1, 0, 'fence'); createBlock(i, getGroundYAt(i, WORLD_SIZE - 1) + 1, WORLD_SIZE - 1, 'fence');
         createBlock(0, getGroundYAt(0, i) + 1, i, 'fence'); createBlock(WORLD_SIZE - 1, getGroundYAt(WORLD_SIZE - 1, i) + 1, i, 'fence');
     }
 
-    // Distribute structural organic foliage modules
-    spawnTree(15, 25, 4); spawnTree(65, 30, 4); spawnTree(hillCenterX, hillCenterZ+1, 5); spawnTree(40, 65, 4);
-    spawnTree(65, 22, 4); spawnTree(25, 65, 5);
+    // Trees spawned exclusively close to the edges of the map
+    spawnTree(6, 8, 4);     spawnTree(8, 62, 4); 
+    spawnTree(62, 8, 5);    spawnTree(64, 60, 4);
+    spawnTree(5, 35, 4);    spawnTree(63, 35, 5);
 
-    // 6 strategic tactical firepit safe zones
-    buildFirepit(25, 25);   buildFirepit(65, 25);
-    buildFirepit(25, 65);   buildFirepit(65, 65);
-    buildFirepit(50, 35);   buildFirepit(35, 55);
+    // 7 Strategic Firepit Placement Configurations
+    buildFirepit(15, 15);   buildFirepit(55, 15);
+    buildFirepit(15, 55);   buildFirepit(55, 55);
+    buildFirepit(45, 25);   buildFirepit(25, 45);
+    buildFirepit(35, 35);   // New 7th firepit center zone
 
-    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 10);
+    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 8);
 }
 
 // =========================================================================
-// 9. HOTBAR CONTROLS CONNECTIONS
+// 10. HOTBAR CONTROLS CONNECTIONS
 // =========================================================================
 window.selectSlot = function(type) {
     currentSelectedType = type; playSound('ui');
@@ -468,7 +457,7 @@ window.selectSlot = function(type) {
 };
 
 // =========================================================================
-// 10. MOBILE LOOK DRAG & TOUCH SPRINT MAPPERS
+// 11. MOBILE LOOK DRAG & TOUCH SPRINT MAPPERS
 // =========================================================================
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0, isDraggingCamera = false;
@@ -509,7 +498,7 @@ bindDpadDirection('dpad-up', 'forward'); bindDpadDirection('dpad-down', 'backwar
 bindDpadDirection('dpad-left', 'left'); bindDpadDirection('dpad-right', 'right');
 
 // =========================================================================
-// 11. JUMP MECHANICS ENGINE (UPGRADED TRIPLE JUMP COMBO)
+// 12. JUMP MECHANICS ENGINE
 // =========================================================================
 let playerVelocityY = 0, remainingJumpsCount = 3; 
 const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.165, FLOOR_LEVEL_HEIGHT = 4.5;
@@ -542,7 +531,7 @@ function processPhysicsPipeline() {
 }
 
 // =========================================================================
-// 12. CORE DESTRUCTION / PLACEMENT RAYCAST INTERFACES
+// 13. CORE COMBAT & DESTRUCTION RAYCAST INTERFACES
 // =========================================================================
 const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
 
@@ -550,34 +539,67 @@ function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     if (!isPlacement) triggerAxeSwingAnimation();
 
-    // Weapon Damage Processing Hits Target Zombies
     if (!isPlacement) {
-        const meshes = activeZombies.map(z => z.mesh.children[0]); 
-        const intersects = raycaster.intersectObjects(meshes);
-        if (intersects.length > 0 && intersects[0].distance < 8) {
-            const torso = intersects[0].object; const zombie = activeZombies.find(z => z.mesh === torso.parent);
-            if (zombie) {
+        // Attack Living Entities Loop Setup
+        const targetMeshes = [];
+        
+        // Collate Zombie bounding box parts
+        activeZombies.forEach(z => { if(z.mesh.children[0]) targetMeshes.push(z.mesh.children[0]); });
+        // Collate Animal body segments
+        activeAnimals.forEach(a => { if(!a.isGhost && a.mesh.children[0]) targetMeshes.push(a.mesh.children[0]); });
+
+        const intersectsEntities = raycaster.intersectObjects(targetMeshes);
+        if (intersectsEntities.length > 0 && intersectsEntities[0].distance < 7.5) {
+            const hitSegment = intersectsEntities[0].object;
+            const rootGroup = hitSegment.parent;
+
+            // 1st Check: Is target a Zombie?
+            const zombieTarget = activeZombies.find(z => z.mesh === rootGroup);
+            if (zombieTarget) {
                 playSound('break');
-                zombie.hitpoints -= 1;
-                spawnBlockBreakParticles(zombie.mesh.position.x, zombie.mesh.position.y+0.5, zombie.mesh.position.z, 0x16a34a);
-                if (zombie.hitpoints <= 0) {
-                    playSound('death'); scene.remove(zombie.mesh);
-                    activeZombies = activeZombies.filter(z => z !== zombie);
+                zombieTarget.hitpoints -= 1;
+                spawnBlockBreakParticles(zombieTarget.mesh.position.x, zombieTarget.mesh.position.y + 0.5, zombieTarget.mesh.position.z, 0x16a34a);
+                if (zombieTarget.hitpoints <= 0) {
+                    playSound('death'); scene.remove(zombieTarget.mesh);
+                    activeZombies = activeZombies.filter(z => z !== zombieTarget);
+                }
+                return;
+            }
+
+            // 2nd Check: Is target a peaceful Animal?
+            const animalTarget = activeAnimals.find(a => a.mesh === rootGroup && !a.isGhost);
+            if (animalTarget) {
+                playSound('hurt');
+                animalTarget.hitpoints -= 1;
+                // Emit combat red critical particles
+                spawnBlockBreakParticles(animalTarget.mesh.position.x, animalTarget.mesh.position.y, animalTarget.mesh.position.z, 0xef4444);
+                
+                if (animalTarget.hitpoints <= 0) {
+                    playSound('death');
+                    animalTarget.isGhost = true;
+                    // Morph color to transparent sky blue look
+                    rootGroup.children.forEach(child => {
+                        if (child.material) {
+                            child.material = child.material.clone();
+                            child.material.color.setHex(0xbbf7d0); 
+                            child.material.opacity = 0.6;
+                        }
+                    });
                 }
                 return;
             }
         }
     }
 
-    const intersects = raycaster.intersectObjects(activeBlocks);
-    if (intersects.length > 0 && intersects[0].distance < 10) {
-        const block = intersects[0].object; if (block.userData.blockType === 'water') return;
+    const intersectsBlocks = raycaster.intersectObjects(activeBlocks);
+    if (intersectsBlocks.length > 0 && intersectsBlocks[0].distance < 10) {
+        const block = intersectsBlocks[0].object; if (block.userData.blockType === 'water') return;
         if (!isPlacement) {
             playSound('break'); let targetColor = block.material.color ? block.material.color.getHex() : 0xcccccc;
             spawnBlockBreakParticles(block.position.x, block.position.y, block.position.z, targetColor);
             scene.remove(block); activeBlocks = activeBlocks.filter(b => b !== block);
         } else {
-            playSound('place'); const n = intersects[0].face.normal;
+            playSound('place'); const n = intersectsBlocks[0].face.normal;
             createBlock(Math.round(block.position.x + n.x), Math.round(block.position.y + n.y), Math.round(block.position.z + n.z), currentSelectedType);
         }
     }
@@ -589,19 +611,19 @@ document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.pr
 document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
 
 // =========================================================================
-// 13. LOCAL SNAPSHOT STORAGE DATA BACKUPS
+// 14. LOCAL ENCRYPTED SNAPSHOT STORAGE DATA BACKUPS
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui'); const data = activeBlocks.map(b => ({ x: b.position.x, y: b.position.y, z: b.position.z, type: b.userData.blockType }));
-    localStorage.setItem('nickcraft_v5_save', JSON.stringify(data)); alert('Nickcraft World State Saved!');
+    localStorage.setItem('nickcraft_v7_save', JSON.stringify(data)); alert('Nickcraft World State Saved!');
 };
 window.loadWorld = function() {
-    playSound('ui'); const data = localStorage.getItem('nickcraft_v5_save'); if (!data) return alert('No backup snapshot found!');
+    playSound('ui'); const data = localStorage.getItem('nickcraft_v7_save'); if (!data) return alert('No backup snapshot found!');
     clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('Nickcraft World State Restored!');
 };
 
 // =========================================================================
-// 14. MAIN ENGINE TICK ANIMATION LOOP
+// 15. MAIN ENGINE TICK ANIMATION LOOP
 // =========================================================================
 function animate() {
     requestAnimationFrame(animate);
