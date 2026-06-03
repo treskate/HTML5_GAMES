@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. COMPREHENSIVE NICKCRAFT AUDIO SYNTH ENGINE
+// 0. COMPREHENSIVE AUDIO SYNTH ENGINE
 // =========================================================================
 let audioCtx = null;
 function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -44,11 +44,16 @@ function playSound(type) {
         osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
         gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.05);
         osc.start(now); osc.stop(now + 0.05);
+    } else if (type === 'hurt') {
+        osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now);
+        osc.frequency.linearRampToValueAtTime(50, now + 0.2);
+        gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now); osc.stop(now + 0.2);
     }
 }
 
 // =========================================================================
-// 1. SCENE SETUP & EXTENDED ENVIRONMENT CYCLE Engine
+// 1. ENGINE INITIALIZATION & SYSTEM MAP SIZE (120 BLOCKS WIDE)
 // =========================================================================
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -60,30 +65,36 @@ document.body.appendChild(renderer.domElement);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
-sunLight.position.set(60, 100, 30);
+sunLight.position.set(80, 120, 40);
 sunLight.castShadow = true;
 scene.add(sunLight);
 
-let worldTime = 0; 
+// Level expanded to 120 blocks wide and long
+const WORLD_SIZE = 120; 
+let worldTime = 0, currentDayFactor = 1.0; 
+
 function updateDayNightCycle() {
     worldTime += 0.001; // Slower time step for longer day cycles
-    const dayFactor = (Math.sin(worldTime) + 1) / 2; 
+    currentDayFactor = (Math.sin(worldTime) + 1) / 2; 
     
-    const skyColor = new THREE.Color(0x0a0d1a).lerp(new THREE.Color(0x87CEEB), dayFactor);
+    const skyColor = new THREE.Color(0x0a0d1a).lerp(new THREE.Color(0x87CEEB), currentDayFactor);
     scene.background = skyColor;
     if (scene.fog) scene.fog.color = skyColor;
     
-    ambientLight.intensity = 0.15 + (dayFactor * 0.55);
-    sunLight.intensity = dayFactor * 0.7;
-    sunLight.position.x = Math.cos(worldTime) * 90;
-    sunLight.position.y = Math.sin(worldTime) * 90;
+    ambientLight.intensity = 0.15 + (currentDayFactor * 0.55);
+    sunLight.intensity = currentDayFactor * 0.7;
+    sunLight.position.x = Math.cos(worldTime) * 100;
+    sunLight.position.y = Math.sin(worldTime) * 100;
 
-    const nightIntensity = (1.0 - dayFactor) * 2.0;
+    const nightIntensity = (1.0 - currentDayFactor) * 2.0;
     firepitsArray.forEach(f => { f.light.intensity = nightIntensity; });
+
+    // Spawn zombies at night, trigger daytime burn effects
+    manageZombieSpawnsAndSunburns();
 }
 
 // =========================================================================
-// 2. VOXEL BLOCK GENERATION AND TEXTURING
+// 2. MATERIALS AND TEXTURE FACTORIES
 // =========================================================================
 function createVoxelTexture(baseColor, noiseColor, style) {
     const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
@@ -106,18 +117,17 @@ const materials = {
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
-    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.75 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.1, transparent: true, opacity: 0.75 }),
     fence: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 }),
     coal: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#2d2d2d', '#1a1a1a', 'noise') }),
-    logo: new THREE.MeshBasicMaterial({ color: 0xffffff })
+    logo: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+    zombieSkin: new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.8 }),
+    zombieShirt: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.8 })
 };
 
 const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-let activeBlocks = []; let activeAnimals = []; let firepitsArray = []; let particleSystems = [];
+let activeBlocks = []; let activeAnimals = []; let activeZombies = []; let firepitsArray = []; let particleSystems = [];
 let currentSelectedType = 'grass';
-
-// 1.5x Bigger World Expansion Dimension Maps
-const WORLD_SIZE = 72; 
 
 function createBlock(x, y, z, type) {
     const material = materials[type] || materials.grass;
@@ -129,8 +139,8 @@ function createBlock(x, y, z, type) {
 
 function clearCurrentWorld() {
     activeBlocks.forEach(b => scene.remove(b)); activeAnimals.forEach(a => scene.remove(a.mesh));
-    firepitsArray.forEach(f => { scene.remove(f.mesh); scene.remove(f.light); });
-    activeBlocks = []; activeAnimals = []; firepitsArray = [];
+    activeZombies.forEach(z => scene.remove(z.mesh)); firepitsArray.forEach(f => { scene.remove(f.mesh); scene.remove(f.light); });
+    activeBlocks = []; activeAnimals = []; activeZombies = []; firepitsArray = [];
 }
 
 function getGroundYAt(x, z) {
@@ -144,7 +154,7 @@ function getGroundYAt(x, z) {
 }
 
 // =========================================================================
-// 3. SPECIAL EFFECT PARTICLES PIPELINE (SHARDS, SMOKE, BLAST RINGS)
+// 3. ADVANCED SPECIAL EFFECTS PIPELINE
 // =========================================================================
 function spawnBlockBreakParticles(x, y, z, colorHex) {
     const count = 10; const geo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
@@ -156,17 +166,16 @@ function spawnBlockBreakParticles(x, y, z, colorHex) {
     }
 }
 
-function spawnSmokeParticle(x, y, z) {
+function spawnSmokeParticle(x, y, z, color = 0x9ca3af) {
     const geo = new THREE.BoxGeometry(0.16, 0.16, 0.16);
-    const mat = new THREE.MeshBasicMaterial({ color: 0x9ca3af, transparent: true, opacity: 0.4 });
+    const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
     const p = new THREE.Mesh(geo, mat); p.position.set(x + (Math.random()-0.5)*0.3, y + 0.3, z + (Math.random()-0.5)*0.3);
     scene.add(p);
     particleSystems.push({ mesh: p, type: 'smoke', vx: (Math.random()-0.5)*0.01, vy: 0.015 + Math.random()*0.015, vz: (Math.random()-0.5)*0.01, life: 1.0 });
 }
 
 function spawnJumpBlastRing(px, py, pz) {
-    const ringSegments = 16;
-    const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const ringSegments = 16; const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
     for(let i=0; i<ringSegments; i++) {
         const ang = (i / ringSegments) * Math.PI * 2;
@@ -185,13 +194,12 @@ function updateParticles() {
         
         p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
         if (p.mesh.material) p.mesh.material.opacity = p.life * (p.type === 'smoke' ? 0.4 : p.type === 'blast' ? 0.6 : 1.0);
-        
         if (p.life <= 0) { scene.remove(p.mesh); particleSystems.splice(i, 1); }
     }
 }
 
 // =========================================================================
-// 4. DOWNSIZED WEAPON EQUIPMENT ENGINE
+// 4. PLAYER EQUIPMENT EQUIPMENT
 // =========================================================================
 const axeGroup = new THREE.Group();
 const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.12), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
@@ -210,7 +218,7 @@ function updateAxeAnimationLoop() {
 }
 
 // =========================================================================
-// 5. 4 SLOW FLARE FLICKERING DETAILED FIREPITS
+// 5. SIX DETAILED FIREPITS WITH SAFETY ZONES
 // =========================================================================
 function buildFirepit(cx, cz) {
     const cy = getGroundYAt(cx, cz) + 1; const group = new THREE.Group();
@@ -225,7 +233,7 @@ function buildFirepit(cx, cz) {
     const fireMesh = new THREE.Mesh(fireGeo, fireMat); fireMesh.position.y = 0.35; group.add(fireMesh);
     group.position.set(cx, cy - 0.4, cz); scene.add(group);
     
-    const pLight = new THREE.PointLight(0xf97316, 0, 12, 1.5); pLight.position.set(cx, cy + 0.5, cz); scene.add(pLight);
+    const pLight = new THREE.PointLight(0xf97316, 0, 15, 1.5); pLight.position.set(cx, cy + 0.5, cz); scene.add(pLight);
     firepitsArray.push({ mesh: group, fire: fireMesh, light: pLight, x: cx, y: cy, z: cz, smokeTimer: 0 });
 }
 
@@ -251,7 +259,96 @@ function updateFirepitsLoop() {
 }
 
 // =========================================================================
-// 6. PROCEDURAL VOXEL SKY LOGO GENERATOR
+// 6. ZOMBIE NIGHT SPAWNS & FIREPIT REPELLENT ARTIFICIAL INTELLIGENCE
+// =========================================================================
+function buildZombieMesh() {
+    const group = new THREE.Group();
+    // Torso Shirt Block
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.4), materials.zombieShirt); body.position.y = 0.375; body.castShadow = true; group.add(body);
+    // Green Head Block
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), materials.zombieSkin); head.position.y = 0.975; head.castShadow = true; group.add(head);
+    // Extended Outstretched Arms
+    const armGeo = new THREE.BoxGeometry(0.15, 0.15, 0.55);
+    const leftArm = new THREE.Mesh(armGeo, materials.zombieSkin); leftArm.position.set(-0.35, 0.6, -0.2); leftArm.castShadow = true; group.add(leftArm);
+    const rightArm = new THREE.Mesh(armGeo, materials.zombieSkin); rightArm.position.set(0.35, 0.6, -0.2); rightArm.castShadow = true; group.add(rightArm);
+    return group;
+}
+
+function manageZombieSpawnsAndSunburns() {
+    // Night is defined when currentDayFactor is below 0.35
+    if (currentDayFactor < 0.35) {
+        if (activeZombies.length < 12 && Math.random() > 0.97) {
+            const rx = 10 + Math.random() * (WORLD_SIZE - 20);
+            const rz = 10 + Math.random() * (WORLD_SIZE - 20);
+            // Check if coordinates are safe from firepit radius limits
+            let safeFromFire = true;
+            firepitsArray.forEach(f => { if(Math.sqrt(Math.pow(rx-f.x,2)+Math.pow(rz-f.z,2)) < 15) safeFromFire = false; });
+            
+            if (safeFromFire) {
+                const ry = getGroundYAt(rx, rz);
+                const zm = buildZombieMesh(); zm.position.set(rx, ry, rz); scene.add(zm);
+                activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 3, targetFlee: null });
+            }
+        }
+    } else {
+        // Daylight Burn Loop Process
+        for (let i = activeZombies.length - 1; i >= 0; i--) {
+            const z = activeZombies[i];
+            spawnSmokeParticle(z.mesh.position.x, z.mesh.position.y + 0.5, z.mesh.position.z, 0xff7700); // Orange/ash burning fire embers
+            scene.remove(z.mesh);
+            activeZombies.splice(i, 1);
+        }
+    }
+}
+
+function updateZombiesLoop() {
+    const ZOMBIE_SPEED = 0.035;
+    activeZombies.forEach(z => {
+        let dx = camera.position.x - z.mesh.position.x;
+        let dz = camera.position.z - z.mesh.position.z;
+        let distanceToPlayer = Math.sqrt(dx*dx + dz*dz);
+
+        // Core Intelligence Routine: Flee from active firepit warmth radii
+        let nearFirepit = null;
+        firepitsArray.forEach(f => {
+            let fdx = z.mesh.position.x - f.x;
+            let fdz = z.mesh.position.z - f.z;
+            let fDist = Math.sqrt(fdx*fdx + fdz*fdz);
+            if (fDist < 14) nearFirepit = f;
+        });
+
+        if (nearFirepit) {
+            // Run completely opposite from firepit layout grid
+            let fdx = z.mesh.position.x - nearFirepit.x;
+            let fdz = z.mesh.position.z - nearFirepit.z;
+            let angle = Math.atan2(fdz, fdx);
+            z.mesh.position.x += Math.cos(angle) * ZOMBIE_SPEED * 1.3;
+            z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED * 1.3;
+            z.mesh.rotation.y = -angle + Math.PI/2;
+        } else if (distanceToPlayer < 32) {
+            // Chase the player
+            let angle = Math.atan2(dz, dx);
+            z.mesh.position.x += Math.cos(angle) * ZOMBIE_SPEED;
+            z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED;
+            z.mesh.rotation.y = -angle - Math.PI/2;
+
+            // Attack player trigger boundaries
+            if (distanceToPlayer < 1.3 && Math.abs(camera.position.y - (z.mesh.position.y + 1)) < 1.5) {
+                playSound('hurt');
+                playerVelocityY = 0.06; // Knockback push force vertical bounce
+                camera.position.x += Math.cos(angle) * 0.8;
+                camera.position.z += Math.sin(angle) * 0.8;
+            }
+        }
+
+        z.mesh.position.x = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.x));
+        z.mesh.position.z = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.z));
+        z.mesh.position.y = getGroundYAt(z.mesh.position.x, z.mesh.position.z);
+    });
+}
+
+// =========================================================================
+// 7. SKY TITLE TEXT LAYER DESIGNER ("NICKCRAFT")
 // =========================================================================
 const NICKCRAFT_MATRIX = {
     'N': [[1,0,0,0,1],[1,1,0,0,1],[1,0,1,0,1],[1,0,0,1,1],[1,0,0,0,1]],
@@ -269,42 +366,39 @@ function generateSkyLogoText() {
     let currentStartX = 0;
     
     sequence.forEach(char => {
-        const schema = NICKCRAFT_MATRIX[char];
-        if(!schema) return;
+        const schema = NICKCRAFT_MATRIX[char]; if(!schema) return;
         const rows = schema.length;
         for(let r=0; r<rows; r++) {
             for(let c=0; c<schema[r].length; c++) {
                 if(schema[r][c] === 1) {
-                    // Render blocks upside down relative to loop layout array matrices
                     const block = new THREE.Mesh(blockGeometry, materials.logo);
                     block.position.set(currentStartX + c, (rows - r), 0);
                     block.castShadow = true; logoGroup.add(block);
                 }
             }
         }
-        currentStartX += schema[0].length + 2; // Spacing between individual character modules
+        currentStartX += schema[0].length + 2; 
     });
     
-    // Scale logo up significantly and center it over the middle of the expanded board
-    logoGroup.scale.set(2.2, 2.2, 2.2);
-    logoGroup.position.set(WORLD_SIZE / 2 - 50, 42, WORLD_SIZE / 2);
+    logoGroup.scale.set(3.0, 3.0, 3.0); // Scale text to fit the 120-wide sky
+    logoGroup.position.set(WORLD_SIZE / 2 - 65, 50, WORLD_SIZE / 2);
     scene.add(logoGroup);
 }
 
 // =========================================================================
-// 7. ANIMALS SYSTEM
+// 8. COEXISTING PEACEFUL ANIMALS ENGINE
 // =========================================================================
 const animalConfig = [
-    { type: 'horse', color: 0x5c2d17, size: [0.7, 0.8, 1.1], count: 2 },
-    { type: 'dog', color: 0xc2410c, size: [0.4, 0.45, 0.65], count: 3 },
-    { type: 'cat', color: 0xd97706, size: [0.3, 0.3, 0.45], count: 3 },
-    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.75], count: 5 }
+    { type: 'horse', color: 0x5c2d17, size: [0.7, 0.8, 1.1], count: 3 },
+    { type: 'dog', color: 0xc2410c, size: [0.4, 0.45, 0.65], count: 4 },
+    { type: 'cat', color: 0xd97706, size: [0.3, 0.3, 0.45], count: 4 },
+    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.75], count: 6 }
 ];
 function spawnAnimals() {
     animalConfig.forEach(cfg => {
         for (let i = 0; i < cfg.count; i++) {
-            const rx = Math.floor(6 + Math.random() * (WORLD_SIZE - 12));
-            const rz = Math.floor(6 + Math.random() * (WORLD_SIZE - 12));
+            const rx = Math.floor(10 + Math.random() * (WORLD_SIZE - 20));
+            const rz = Math.floor(10 + Math.random() * (WORLD_SIZE - 20));
             const ry = getGroundYAt(rx, rz) + (cfg.size[1]/2) + 0.5;
             const group = new THREE.Group();
             const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.85 });
@@ -327,14 +421,7 @@ function updateAnimalsLoop() {
         a.moveTimer -= 0.016;
         if (a.moveTimer <= 0) {
             a.moveTimer = 3 + Math.random() * 3;
-            if (a.type === 'pig') {
-                const dx = (WORLD_SIZE/2) - a.mesh.position.x; const dz = (WORLD_SIZE/2) - a.mesh.position.z;
-                const angle = Math.atan2(dz, dx) + (Math.random() - 0.5);
-                a.vx = Math.cos(angle) * 0.025; a.vz = Math.sin(angle) * 0.025; a.mesh.rotation.y = -angle + Math.PI/2;
-            } else if (a.type === 'horse' && Math.random() > 0.75) {
-                a.vx = 0; a.vz = 0; const hx = Math.round(a.mesh.position.x); const hz = Math.round(a.mesh.position.z);
-                activeBlocks.forEach(b => { if (Math.round(b.position.x) === hx && Math.round(b.position.z) === hz && b.userData.blockType === 'grass') { b.material = materials.dirt; b.userData.blockType = 'dirt'; } });
-            } else if (Math.random() > 0.3) {
+            if (Math.random() > 0.3) {
                 const angle = Math.random() * Math.PI * 2; a.vx = Math.cos(angle) * 0.03; a.vz = Math.sin(angle) * 0.03; a.mesh.rotation.y = -angle + Math.PI/2;
             } else { a.vx = 0; a.vz = 0; }
         }
@@ -345,7 +432,7 @@ function updateAnimalsLoop() {
 }
 
 // =========================================================================
-// 8. 1.5x WORLD LANDSCAPE ARCHITECTURE
+// 9. PROCEDURAL GENERATION: LANDSCAPES, POOLS, & FENCES
 // =========================================================================
 function spawnTree(trunkX, trunkZ, customHeight = 4) {
     const surfaceY = getGroundYAt(trunkX, trunkZ); const startY = surfaceY + 1;
@@ -356,51 +443,61 @@ function spawnTree(trunkX, trunkZ, customHeight = 4) {
 }
 
 function generateDefaultWorld() {
-    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.01);
-    const hillCenterX = Math.floor(WORLD_SIZE * 0.25), hillCenterZ = Math.floor(WORLD_SIZE * 0.3);
-    const puddleCenterX = Math.floor(WORLD_SIZE * 0.6), puddleCenterZ = Math.floor(WORLD_SIZE * 0.6);
+    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.008);
+    const hillCenterX = 30, hillCenterZ = 35;
+    
+    // Swimming Pool Location Configurations
+    const poolX = 75, poolZ = 80, poolRadius = 10;
 
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
             const distToHill = Math.sqrt(Math.pow(x - hillCenterX, 2) + Math.pow(z - hillCenterZ, 2));
-            let hillHeight = 0; if (distToHill < 12) hillHeight = Math.round((12 - distToHill) * 0.5);
-            const distToPuddle = Math.sqrt(Math.pow(x - puddleCenterX, 2) + Math.pow(z - puddleCenterZ, 2));
-            const isPuddle = distToPuddle < 8;
+            let hillHeight = 0; if (distToHill < 16) hillHeight = Math.round((16 - distToHill) * 0.5);
+            
+            const distToPool = Math.sqrt(Math.pow(x - poolX, 2) + Math.pow(z - poolZ, 2));
+            const isInsidePool = distToPool < poolRadius;
+            const isPoolEdgeFenceLine = (Math.abs(distToPool - (poolRadius + 2)) < 0.6);
 
             createBlock(x, 0, z, 'stone');
-            if (isPuddle) {
-                createBlock(x, 1, z, 'stone'); createBlock(x, 2, z, 'water');
+            if (isInsidePool) {
+                // Dig a 2-block deep excavation for the pool water
+                createBlock(x, 1, z, 'stone'); 
+                createBlock(x, 2, z, 'water');
             } else {
                 createBlock(x, 1, z, 'dirt'); createBlock(x, 2, z, 'grass');
                 for (let h = 0; h < hillHeight; h++) createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
+                
+                // Construct a protective fence wrap entirely around the swimming pool perimeter
+                if (isPoolEdgeFenceLine && x % 2 === 0 && z % 2 === 0) {
+                    createBlock(x, 3, z, 'fence');
+                }
             }
         }
     }
     
-    // Perimeter fences
+    // Boundary perimeter map fence posts
     for (let i = 0; i < WORLD_SIZE; i++) {
         createBlock(i, getGroundYAt(i, 0) + 1, 0, 'fence'); createBlock(i, getGroundYAt(i, WORLD_SIZE - 1) + 1, WORLD_SIZE - 1, 'fence');
         createBlock(0, getGroundYAt(0, i) + 1, i, 'fence'); createBlock(WORLD_SIZE - 1, getGroundYAt(WORLD_SIZE - 1, i) + 1, i, 'fence');
     }
 
-    // Natural Foliage Layout Distributes
-    spawnTree(12, 26, 4); spawnTree(Math.floor(WORLD_SIZE*0.8), 20, 4); spawnTree(hillCenterX, hillCenterZ+1, 5); spawnTree(25, Math.floor(WORLD_SIZE*0.7), 3);
-    spawnTree(45, 18, 4); spawnTree(18, 52, 5);
+    // Distribute structural organic foliage modules
+    spawnTree(15, 25, 4); spawnTree(100, 30, 4); spawnTree(hillCenterX, hillCenterZ+1, 5); spawnTree(40, 90, 4);
+    spawnTree(85, 22, 4); spawnTree(25, 105, 5);
 
-    // Quad distribution firepits
-    buildFirepit(Math.floor(WORLD_SIZE*0.3), Math.floor(WORLD_SIZE*0.3));
-    buildFirepit(Math.floor(WORLD_SIZE*0.7), Math.floor(WORLD_SIZE*0.25));
-    buildFirepit(Math.floor(WORLD_SIZE*0.25), Math.floor(WORLD_SIZE*0.7));
-    buildFirepit(Math.floor(WORLD_SIZE*0.75), Math.floor(WORLD_SIZE*0.75));
+    // 6 strategic tactical firepit safe zones
+    buildFirepit(25, 25);   buildFirepit(95, 25);
+    buildFirepit(25, 95);   buildFirepit(95, 95);
+    buildFirepit(60, 45);   buildFirepit(45, 75);
 
     // Mount giant 3D title text logo in the sky
     generateSkyLogoText();
 
-    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 6);
+    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 10);
 }
 
 // =========================================================================
-// 9. HOTBAR MANAGEMENT CONNECTIONS
+// 10. HOTBAR CONTROLS CONNECTIONS
 // =========================================================================
 window.selectSlot = function(type) {
     currentSelectedType = type; playSound('ui');
@@ -409,14 +506,14 @@ window.selectSlot = function(type) {
 };
 
 // =========================================================================
-// 10. INPUT MANAGERS (DOUBLE TAP SPRINTING & CROSS LOOKS)
+// 11. MOBILE LOOK DRAG & TOUCH SPRINT MAPPERS
 // =========================================================================
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0, isDraggingCamera = false;
 function getEventCoords(e) { return e.touches && e.touches.length > 0 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
 
 function startTracking(e) {
-    if (e.target.closest('#menu') || e.target.closest('.touch-zone') || e.target.closest('#right-cluster')) return;
+    if (e.target.closest('#menu') || e.target.closest('.touch-zone') || e.target.closest('#right-action-column')) return;
     initAudio(); isDraggingCamera = true; const c = getEventCoords(e); lastTrackX = c.x; lastTrackY = c.y;
 }
 function moveTracking(e) {
@@ -438,7 +535,6 @@ function bindDpadDirection(id, flag) {
     const press = (e) => {
         e.preventDefault(); initAudio();
         const currentTime = Date.now();
-        // Check for quick double taps within 250 milliseconds to activate sprinting fields
         if(flag === 'forward' && (currentTime - lastDpadClickTime < 250)) { isSprintingActive = true; }
         if(flag === 'forward') lastDpadClickTime = currentTime;
         moveDirections[flag] = true;
@@ -451,7 +547,7 @@ bindDpadDirection('dpad-up', 'forward'); bindDpadDirection('dpad-down', 'backwar
 bindDpadDirection('dpad-left', 'left'); bindDpadDirection('dpad-right', 'right');
 
 // =========================================================================
-// 11. ADVANCED TRIPLE JUMP PHYSICS ENVIRONMENT
+// 12. JUMP MECHANICS ENGINE (UPGRADED TRIPLE JUMP COMBO)
 // =========================================================================
 let playerVelocityY = 0, remainingJumpsCount = 3; 
 const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.165, FLOOR_LEVEL_HEIGHT = 4.5;
@@ -464,7 +560,6 @@ function triggerJumpAction(e) {
     } else if (remainingJumpsCount === 2) {
         playerVelocityY = FORCE_JUMP * 0.95; remainingJumpsCount = 1; playSound('jump2');
     } else if (remainingJumpsCount === 1) {
-        // Third Combo Jump: Blast out smoke rings beneath feet!
         playerVelocityY = FORCE_JUMP * 1.1; remainingJumpsCount = 0; playSound('jump1');
         spawnJumpBlastRing(camera.position.x, camera.position.y, camera.position.z);
     }
@@ -477,7 +572,6 @@ function processPhysicsPipeline() {
     
     if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
         camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 3;
-        // Hit the ground landing effects particle triggers
         if(wasPlayerInAir) {
             wasPlayerInAir = false;
             for(let i=0; i<6; i++) spawnSmokeParticle(camera.position.x, FLOOR_LEVEL_HEIGHT - 1.5, camera.position.z);
@@ -486,7 +580,7 @@ function processPhysicsPipeline() {
 }
 
 // =========================================================================
-// 12. ACTION ACTIONS
+// 13. CORE DESTRUCTION / PLACEMENT RAYCAST INTERFACES
 // =========================================================================
 const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
 
@@ -494,15 +588,20 @@ function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     if (!isPlacement) triggerAxeSwingAnimation();
 
+    // Weapon Damage Processing Hits Target Zombies
     if (!isPlacement) {
-        const meshes = activeAnimals.filter(a => !a.isGhost).map(a => a.mesh.children[0]);
+        const meshes = activeZombies.map(z => z.mesh.children[0]); 
         const intersects = raycaster.intersectObjects(meshes);
         if (intersects.length > 0 && intersects[0].distance < 8) {
-            const group = intersects[0].object.parent; const animal = activeAnimals.find(a => a.mesh === group);
-            if (animal) {
-                playSound('death'); animal.isGhost = true;
-                spawnBlockBreakParticles(group.position.x, group.position.y, group.position.z, animal.colorHex);
-                group.children.forEach(c => { if (c.material) { c.material = c.material.clone(); c.material.transparent = true; c.material.color.setHex(0xffffff); } });
+            const torso = intersects[0].object; const zombie = activeZombies.find(z => z.mesh === torso.parent);
+            if (zombie) {
+                playSound('break');
+                zombie.hitpoints -= 1;
+                spawnBlockBreakParticles(zombie.mesh.position.x, zombie.mesh.position.y+0.5, zombie.mesh.position.z, 0x16a34a);
+                if (zombie.hitpoints <= 0) {
+                    playSound('death'); scene.remove(zombie.mesh);
+                    activeZombies = activeZombies.filter(z => z !== zombie);
+                }
                 return;
             }
         }
@@ -526,30 +625,26 @@ document.getElementById('mb-break').addEventListener('touchstart', (e) => { e.pr
 document.getElementById('mb-break').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
 document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
 document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
-window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 13. DATA STORAGE
+// 14. LOCAL ENCRYPTED SNAPSHOT STORAGE DATA BACKUPS
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui'); const data = activeBlocks.map(b => ({ x: b.position.x, y: b.position.y, z: b.position.z, type: b.userData.blockType }));
-    localStorage.setItem('nickcraft_v4_save', JSON.stringify(data)); alert('Nickcraft Data Backup Created!');
+    localStorage.setItem('nickcraft_v5_save', JSON.stringify(data)); alert('Nickcraft World State Saved!');
 };
 window.loadWorld = function() {
-    playSound('ui'); const data = localStorage.getItem('nickcraft_v4_save'); if (!data) return alert('No snapshot record found!');
-    clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('Nickcraft Data Backup Restored!');
+    playSound('ui'); const data = localStorage.getItem('nickcraft_v5_save'); if (!data) return alert('No backup snapshot found!');
+    clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('Nickcraft World State Restored!');
 };
 
 // =========================================================================
-// 14. MASTER TICK FRAME LOOP
+// 15. MAIN ENGINE TICK ANIMATION LOOP
 // =========================================================================
 function animate() {
     requestAnimationFrame(animate);
     
-    // Calculate current running modifier constants
     const currentMoveSpeed = isSprintingActive ? 0.20 : 0.11;
-    
-    // Dynamic FOV shift effect for high-speed sprinting feedback
     const targetFOV = isSprintingActive ? 84 : 75;
     if(camera.fov !== targetFOV) { camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 0.15); camera.updateProjectionMatrix(); }
     
@@ -561,11 +656,10 @@ function animate() {
     if (moveDirections.left) camera.position.addScaledVector(rightVec, -currentMoveSpeed);
     if (moveDirections.right) camera.position.addScaledVector(rightVec, currentMoveSpeed);
 
-    // Dynamic camera safety boundaries for the expanded map
     camera.position.x = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.x));
     camera.position.z = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.z));
 
-    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateFirepitsLoop(); updateParticles(); updateDayNightCycle();
+    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); updateParticles(); updateDayNightCycle();
     renderer.render(scene, camera);
 }
 

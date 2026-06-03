@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nickcraft - Sandbox Edition</title>
+    <title>Nickcraft - Survival Sandbox</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #87CEEB; user-select: none; -webkit-user-select: none; touch-action: none; }
         #ui { position: absolute; top: 12px; left: 12px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; z-index: 10; }
@@ -12,7 +12,7 @@
         
         #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; background: white; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; mix-blend-mode: difference; }
         
-        /* Hotbar Element Tray Visuals */
+        /* Creative Inventory Visuals */
         #menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.85); padding: 6px; border: 4px solid #4a4a4a; border-radius: 4px; display: flex; gap: 6px; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
         .hotbar-slot { width: 54px; height: 54px; color: white; border: 3px solid #2c2c2c; border-radius: 4px; font-weight: bold; font-size: 11px; text-shadow: 1px 1px 2px black; cursor: pointer; display: flex; align-items: center; justify-content: center; text-transform: uppercase; transition: all 0.1s ease; }
         .slot-grass { background: #557a2b; }
@@ -22,15 +22,14 @@
         .slot-action { background: #0284c7; width: auto; padding: 0 12px; font-size: 12px; }
         .hotbar-slot.active-slot { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 0 12px rgba(255,255,255,0.6); }
         
-        /* Unified Touch Zones */
         .touch-zone { position: absolute; z-index: 15; }
         
-        /* Perfectly Square Chunky Cross Layout D-Pad (80px x 80px) */
+        /* Square Centerless Mobile D-Pad (80px x 80px blocks) */
         #dpad-container { bottom: 35px; left: 35px; width: 252px; height: 252px; display: grid; grid-template-columns: repeat(3, 84px); grid-template-rows: repeat(3, 84px); background: transparent; }
         .dpad-btn { width: 80px; height: 80px; background: rgba(115, 122, 110, 0.75); border: 5px solid #282c24; border-bottom-width: 8px; border-radius: 0px; box-shadow: inset 0px 4px 0px rgba(255,255,255,0.2), 0px 5px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
         .dpad-btn:active { background: rgba(75, 80, 70, 0.9); border-bottom-width: 5px; transform: translateY(3px); box-shadow: inset 0px 2px 4px rgba(0,0,0,0.4); }
         
-        /* Sharp Pixelated Triangles */
+        /* Pixelated Arrow Shapes */
         .dpad-arrow { width: 0; height: 0; border-style: solid; opacity: 0.9; }
         #dpad-up .dpad-arrow { border-width: 0 18px 22px 18px; border-color: transparent transparent #161a13 transparent; }
         #dpad-left .dpad-arrow { border-width: 18px 22px 18px 0; border-color: transparent #161a13 transparent transparent; }
@@ -42,23 +41,23 @@
         #dpad-right { grid-column: 3; grid-row: 2; }
         #dpad-down { grid-column: 2; grid-row: 3; }
         
-        /* Ergonomic Balanced Right Hand Action Control Cluster */
-        #right-cluster { position: absolute; bottom: 35px; right: 35px; width: 260px; height: 210px; z-index: 15; display: grid; grid-template-columns: 110px 130px; grid-template-rows: repeat(2, 95px); gap: 15px; }
+        /* Vertical Right-Side Column (Jump above Place above Break) */
+        #right-action-column { position: absolute; bottom: 35px; right: 35px; width: 110px; display: flex; flex-direction: column; align-items: center; gap: 14px; z-index: 15; }
         
-        /* Jump Pad Moved To Right Side */
-        #jump-pad { grid-column: 1; grid-row: 1 / span 2; height: 205px; background: rgba(255,255,255,0.12); border: 4px dashed rgba(255,255,255,0.4); border-radius: 16px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 20px; text-shadow: 1px 1px 2px black; cursor: pointer; }
-        #jump-pad:active { background: rgba(255,255,255,0.25); }
+        /* Round Jump Button Visual Style */
+        #jump-pad { width: 96px; height: 96px; background: rgba(2, 132, 199, 0.8); border: 4px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px black; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.35); }
+        #jump-pad:active { background: rgba(3, 105, 161, 0.9); transform: scale(0.94); box-shadow: 0 3px 6px rgba(0,0,0,0.2); }
         
-        .mobile-btn { width: 100%; height: 95px; border: 3px solid white; color: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 19px; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px black; }
-        #mb-place { grid-column: 2; grid-row: 1; background: rgba(56, 161, 105, 0.8); }
-        #mb-break { grid-column: 2; grid-row: 2; background: rgba(229, 62, 62, 0.8); }
+        .action-column-btn { width: 106px; height: 80px; border: 3px solid white; color: white; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.3); text-shadow: 1px 1px 2px black; }
+        #mb-place { background: rgba(56, 161, 105, 0.85); }
+        #mb-break { background: rgba(229, 62, 62, 0.85); }
     </style>
 </head>
 <body>
 
     <div id="ui">
         <h1>Nickcraft</h1>
-        <p>Left: Square D-Pad (Double-Tap Sprint) | Right: Action Controls & Triple Jump</p>
+        <p>Zombies spawn at night & flee from firepits | Double-Tap D-Pad up to Sprint</p>
     </div>
     
     <div id="crosshair"></div>
@@ -70,10 +69,10 @@
         <div class="dpad-btn" id="dpad-down"><div class="dpad-arrow"></div></div>
     </div>
     
-    <div id="right-cluster">
-        <div id="jump-pad">TRIPLE<br>JUMP</div>
-        <div class="mobile-btn" id="mb-place">PLACE</div>
-        <div class="mobile-btn" id="mb-break">BREAK</div>
+    <div id="right-action-column">
+        <div id="jump-pad">JUMP</div>
+        <div class="action-column-btn" id="mb-place">PLACE</div>
+        <div class="action-column-btn" id="mb-break">BREAK</div>
     </div>
 
     <div id="menu">
