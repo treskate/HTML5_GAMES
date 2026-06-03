@@ -49,6 +49,11 @@ function playSound(type) {
         osc.frequency.linearRampToValueAtTime(50, now + 0.2);
         gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.2);
         osc.start(now); osc.stop(now + 0.2);
+    } else if (type === 'splash') {
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(90, now);
+        osc.frequency.linearRampToValueAtTime(40, now + 0.18);
+        gainNode.gain.setValueAtTime(0.35, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.18);
+        osc.start(now); osc.stop(now + 0.18);
     }
 }
 
@@ -69,7 +74,6 @@ sunLight.position.set(45, 90, 30);
 sunLight.castShadow = true;
 scene.add(sunLight);
 
-// Level updated to 70 blocks wide and long
 const WORLD_SIZE = 70; 
 let worldTime = 0, currentDayFactor = 1.0; 
 
@@ -116,10 +120,9 @@ const materials = {
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
-    water: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.1, transparent: true, opacity: 0.75 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.1, transparent: true, opacity: 0.6 }),
     fence: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 }),
     coal: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#2d2d2d', '#1a1a1a', 'noise') }),
-    logo: new THREE.MeshBasicMaterial({ color: 0xffffff }),
     zombieSkin: new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.8 }),
     zombieShirt: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.8 })
 };
@@ -128,10 +131,13 @@ const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 let activeBlocks = []; let activeAnimals = []; let activeZombies = []; let firepitsArray = []; let particleSystems = [];
 let currentSelectedType = 'grass';
 
-// Ghost Block Preview Blueprint Config
+// Highly Optimized World Grid Lookup Map for fast structural queries
+const blockGridMap = {};
+function getGridKey(x, y, z) { return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`; }
+
 let ghostBlockMesh = null;
 function createGhostBlockSystem() {
-    const geo = new THREE.BoxGeometry(1.02, 1.02, 1.02); // Slightly larger to prevent flickering overlap
+    const geo = new THREE.BoxGeometry(1.02, 1.02, 1.02); 
     const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, wireframe: true });
     ghostBlockMesh = new THREE.Mesh(geo, mat);
     ghostBlockMesh.visible = false;
@@ -143,13 +149,23 @@ function createBlock(x, y, z, type) {
     const mesh = new THREE.Mesh(blockGeometry, material);
     mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true;
     mesh.userData = { blockType: type }; scene.add(mesh); activeBlocks.push(mesh);
+    
+    blockGridMap[getGridKey(x, y, z)] = type;
     return mesh;
+}
+
+function removeBlockFromState(block) {
+    const key = getGridKey(block.position.x, block.position.y, block.position.z);
+    delete blockGridMap[key];
+    scene.remove(block);
+    activeBlocks = activeBlocks.filter(b => b !== block);
 }
 
 function clearCurrentWorld() {
     activeBlocks.forEach(b => scene.remove(b)); activeAnimals.forEach(a => scene.remove(a.mesh));
     activeZombies.forEach(z => scene.remove(z.mesh)); firepitsArray.forEach(f => { scene.remove(f.mesh); scene.remove(f.light); });
     activeBlocks = []; activeAnimals = []; activeZombies = []; firepitsArray = [];
+    for (let member in blockGridMap) delete blockGridMap[member];
 }
 
 function getGroundYAt(x, z) {
@@ -366,19 +382,16 @@ function updateGhostBlockPreviewLoop() {
         
         const faceNormal = intersects[0].face.normal;
         
-        // Match chosen texture block color to ghost layout seamlessly
         if (materials[currentSelectedType]) {
             ghostBlockMesh.material.color.copy(materials[currentSelectedType].color || new THREE.Color(0xffffff));
         }
         
-        // Calculate blueprint grid placement offset positions
         ghostBlockMesh.position.set(
             Math.round(targetBlock.position.x + faceNormal.x),
             Math.round(targetBlock.position.y + faceNormal.y),
             Math.round(targetBlock.position.z + faceNormal.z)
         );
         
-        // Pulsing visualization effect
         ghostBlockMesh.material.opacity = 0.35 + Math.sin(Date.now() * 0.007) * 0.15;
         ghostBlockMesh.visible = true;
     } else {
@@ -539,14 +552,24 @@ bindDpadDirection('dpad-up', 'forward'); bindDpadDirection('dpad-down', 'backwar
 bindDpadDirection('dpad-left', 'left'); bindDpadDirection('dpad-right', 'right');
 
 // =========================================================================
-// 12. JUMP MECHANICS ENGINE
+// 12. JUMP & DEEP WATER BUOYANCY SIMULATION MECHANICAL PIPELINE
 // =========================================================================
 let playerVelocityY = 0, remainingJumpsCount = 3; 
 const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.165, FLOOR_LEVEL_HEIGHT = 4.5;
 let wasPlayerInAir = false;
+let isHoldingJumpPad = false;
+let enteredWaterStateBefore = false;
 
 function triggerJumpAction(e) {
     if (e) e.preventDefault(); initAudio();
+    isHoldingJumpPad = true;
+    
+    // Fallback block coordinate safety check
+    const blockUnderneath = blockGridMap[getGridKey(camera.position.x, camera.position.y - 2.5, camera.position.z)];
+    const insideWater = blockUnderneath === 'water' || blockGridMap[getGridKey(camera.position.x, camera.position.y - 1.5, camera.position.z)] === 'water';
+    
+    if (insideWater) return; // Swimming loop handles upward velocity manually
+    
     if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
         playerVelocityY = FORCE_JUMP; remainingJumpsCount = 2; playSound('jump1'); wasPlayerInAir = true;
     } else if (remainingJumpsCount === 2) {
@@ -556,10 +579,41 @@ function triggerJumpAction(e) {
         spawnJumpBlastRing(camera.position.x, camera.position.y, camera.position.z);
     }
 }
+
+function releaseJumpAction() { isHoldingJumpPad = false; }
 document.getElementById('jump-pad').addEventListener('touchstart', triggerJumpAction);
 document.getElementById('jump-pad').addEventListener('mousedown', triggerJumpAction);
+document.getElementById('jump-pad').addEventListener('touchend', releaseJumpAction);
+document.getElementById('jump-pad').addEventListener('mouseup', releaseJumpAction);
 
 function processPhysicsPipeline() {
+    // Check if player's lower half/feet are occupying a water voxel
+    const feetKey = getGridKey(camera.position.x, camera.position.y - 2.5, camera.position.z);
+    const bodyKey = getGridKey(camera.position.x, camera.position.y - 1.5, camera.position.z);
+    const isPlayerInWaterGrid = (blockGridMap[feetKey] === 'water' || blockGridMap[bodyKey] === 'water');
+
+    if (isPlayerInWaterGrid) {
+        if (!enteredWaterStateBefore) {
+            playSound('splash');
+            enteredWaterStateBefore = true;
+            for(let i=0; i<8; i++) spawnSmokeParticle(camera.position.x, camera.position.y - 2, camera.position.z, 0x3b82f6);
+        }
+        
+        // Buoyancy Engine Physics
+        if (isHoldingJumpPad) {
+            playerVelocityY = THREE.MathUtils.lerp(playerVelocityY, 0.05, 0.15); // Smooth upward swim float
+        } else {
+            playerVelocityY = THREE.MathUtils.lerp(playerVelocityY, -0.02, 0.08); // Gentle downward sink drift
+        }
+        camera.position.y += playerVelocityY;
+        
+        // Prevent sinking through the stone floor beneath the pools
+        if (camera.position.y < 3.5) { camera.position.y = 3.5; playerVelocityY = 0; }
+        return isPlayerInWaterGrid;
+    }
+
+    // Standard Land Gravity Pipeline
+    enteredWaterStateBefore = false;
     playerVelocityY -= GRAVITY_CONSTANT; camera.position.y += playerVelocityY;
     
     if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
@@ -569,6 +623,7 @@ function processPhysicsPipeline() {
             for(let i=0; i<6; i++) spawnSmokeParticle(camera.position.x, FLOOR_LEVEL_HEIGHT - 1.5, camera.position.z);
         }
     }
+    return isPlayerInWaterGrid;
 }
 
 // =========================================================================
@@ -624,11 +679,11 @@ function handleBlockAction(isPlacement) {
 
     const intersectsBlocks = raycaster.intersectObjects(activeBlocks);
     if (intersectsBlocks.length > 0 && intersectsBlocks[0].distance < 10) {
-        const block = intersectsBlocks[0].object; if (block.userData.blockType === 'water') return;
+        const block = intersectsBlocks[0].object; 
         if (!isPlacement) {
             playSound('break'); let targetColor = block.material.color ? block.material.color.getHex() : 0xcccccc;
             spawnBlockBreakParticles(block.position.x, block.position.y, block.position.z, targetColor);
-            scene.remove(block); activeBlocks = activeBlocks.filter(b => b !== block);
+            removeBlockFromState(block);
         } else {
             playSound('place'); const n = intersectsBlocks[0].face.normal;
             createBlock(Math.round(block.position.x + n.x), Math.round(block.position.y + n.y), Math.round(block.position.z + n.z), currentSelectedType);
@@ -642,15 +697,15 @@ document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.pr
 document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
 
 // =========================================================================
-// 14. LOCAL ENCRYPTED SNAPSHOT STORAGE DATA BACKUPS
+// 14. LOCAL STORAGE WORLD Snapshots
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui'); const data = activeBlocks.map(b => ({ x: b.position.x, y: b.position.y, z: b.position.z, type: b.userData.blockType }));
-    localStorage.setItem('nickcraft_v7_save', JSON.stringify(data)); alert('Nickcraft World State Saved!');
+    localStorage.setItem('nickcraft_v8_save', JSON.stringify(data)); alert('Nickcraft World State Saved!');
 };
 window.loadWorld = function() {
-    playSound('ui'); const data = localStorage.getItem('nickcraft_v7_save'); if (!data) return alert('No backup snapshot found!');
-    clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('Nickcraft World State Restored!');
+    playSound('ui'); const data = localStorage.getItem('nickcraft_v8_save'); if (!data) return alert('No save file found!');
+    clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('Nickcraft World State Loaded!');
 };
 
 // =========================================================================
@@ -659,7 +714,13 @@ window.loadWorld = function() {
 function animate() {
     requestAnimationFrame(animate);
     
-    const currentMoveSpeed = isSprintingActive ? 0.20 : 0.11;
+    // Check physics state to dynamically modify movement speed
+    const isSwimming = processPhysicsPipeline();
+    
+    // Slow down movement when swimming to simulate water drag resistance
+    let movementModifier = isSwimming ? 0.55 : 1.0;
+    const currentMoveSpeed = (isSprintingActive ? 0.20 : 0.11) * movementModifier;
+    
     const targetFOV = isSprintingActive ? 84 : 75;
     if(camera.fov !== targetFOV) { camera.fov = THREE.MathUtils.lerp(camera.fov, targetFOV, 0.15); camera.updateProjectionMatrix(); }
     
@@ -674,7 +735,7 @@ function animate() {
     camera.position.x = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.x));
     camera.position.z = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.z));
 
-    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); 
+    updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); 
     updateGhostBlockPreviewLoop(); updateParticles(); updateDayNightCycle();
     
     renderer.render(scene, camera);
