@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. AUDIO SYNTHESIS SOUND CONTROLLERS
+// 0. AUDIO INITIALIZATION SYNTH PIPELINE
 // =========================================================================
 let audioCtx = null;
 function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
@@ -53,50 +53,49 @@ function playSound(type) {
 }
 
 // =========================================================================
-// 1. ENGINE DESIGN & SWEET SPOT MAP SIZE (80 BLOCKS WIDE)
+// 1. ENGINE DESIGN & REVERTED 80x80 WORLD CONFIGURATION
 // =========================================================================
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 180);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 150);
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
-const sunLight = new THREE.DirectionalLight(0xffffff, 0.65);
-sunLight.position.set(40, 70, 30);
+const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+sunLight.position.set(30, 50, 20);
 sunLight.castShadow = true;
-sunLight.shadow.mapSize.width = 512; 
+sunLight.shadow.mapSize.width = 512;
 sunLight.shadow.mapSize.height = 512;
 scene.add(sunLight);
 
-// The map is now set back to a spacious 80x80 blocks
 const WORLD_SIZE = 80; 
 let worldTime = 0, currentDayFactor = 1.0; 
 
 function updateDayNightCycle() {
-    worldTime += 0.0012;
+    worldTime += 0.0015;
     currentDayFactor = (Math.sin(worldTime) + 1) / 2; 
     
     const skyColor = new THREE.Color(0x0a0d1a).lerp(new THREE.Color(0x87CEEB), currentDayFactor);
     scene.background = skyColor;
     if (scene.fog) scene.fog.color = skyColor;
     
-    ambientLight.intensity = 0.22 + (currentDayFactor * 0.5);
-    sunLight.intensity = currentDayFactor * 0.65;
-    sunLight.position.x = Math.cos(worldTime) * 65;
-    sunLight.position.y = Math.sin(worldTime) * 65;
+    ambientLight.intensity = 0.2 + (currentDayFactor * 0.5);
+    sunLight.intensity = currentDayFactor * 0.6;
+    sunLight.position.x = Math.cos(worldTime) * 45;
+    sunLight.position.y = Math.sin(worldTime) * 45;
 
-    const nightIntensity = (1.0 - currentDayFactor) * 1.6;
+    const nightIntensity = (1.0 - currentDayFactor) * 1.5;
     firepitsArray.forEach(f => { f.light.intensity = nightIntensity; });
 
     manageZombieSpawnsAndSunburns();
 }
 
 // =========================================================================
-// 2. STYLIZED PROCEDURAL MATERIAL FACTORIES
+// 2. STYLIZED VOXEL TEXTURING PIPELINE
 // =========================================================================
 function createVoxelTexture(baseColor, noiseColor) {
     const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
@@ -116,7 +115,7 @@ const materials = {
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252'), roughness: 0.8 }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c'), roughness: 0.8 }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d'), roughness: 0.9 }),
-    water: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.2, transparent: true, opacity: 0.75 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x1d4ed8, roughness: 0.2, transparent: true, opacity: 0.7 }),
     fence: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.8 }),
     coal: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#2d2d2d', '#1a1a1a') }),
     zombieSkin: new THREE.MeshStandardMaterial({ color: 0x16a34a }),
@@ -128,7 +127,6 @@ let activeBlocks = []; let activeAnimals = []; let activeZombies = []; let firep
 let currentSelectedType = 'grass';
 
 function createBlock(x, y, z, type, optimizeHidden = false) {
-    // Performance optimization: Cull subsurface blocks to eliminate underground rendering completely
     if (optimizeHidden && y < 1) return null;
     
     const material = materials[type] || materials.grass;
@@ -158,7 +156,7 @@ function getGroundYAt(x, z) {
 }
 
 // =========================================================================
-// 3. SPECIAL EFFECTS PIPELINE
+// 3. LOW-OVERHEAD SPECIAL EFFECTS PARTICLES
 // =========================================================================
 function spawnBlockBreakParticles(x, y, z, colorHex) {
     const count = 5; 
@@ -172,7 +170,7 @@ function spawnBlockBreakParticles(x, y, z, colorHex) {
 }
 
 function spawnSmokeParticle(x, y, z, color = 0x9ca3af) {
-    if (particleSystems.length > 30) return; 
+    if (particleSystems.length > 25) return; 
     const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
     const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.4 });
     const p = new THREE.Mesh(geo, mat); p.position.set(x, y + 0.2, z);
@@ -180,33 +178,8 @@ function spawnSmokeParticle(x, y, z, color = 0x9ca3af) {
     particleSystems.push({ mesh: p, type: 'smoke', vx: (Math.random()-0.5)*0.01, vy: 0.01, vz: (Math.random()-0.5)*0.01, life: 1.0 });
 }
 
-function spawnJumpBlastRing(px, py, pz) {
-    const ringSegments = 8; 
-    const geo = new THREE.BoxGeometry(0.14, 0.14, 0.14);
-    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5 });
-    for(let i=0; i<ringSegments; i++) {
-        const ang = (i / ringSegments) * Math.PI * 2;
-        const p = new THREE.Mesh(geo, mat); p.position.set(px, py - 0.5, pz);
-        scene.add(p);
-        particleSystems.push({ mesh: p, type: 'blast', vx: Math.cos(ang)*0.1, vy: 0.01, vz: Math.sin(ang)*0.1, life: 1.0 });
-    }
-}
-
-function updateParticles() {
-    for (let i = particleSystems.length - 1; i >= 0; i--) {
-        const p = particleSystems[i];
-        if (p.type === 'shard') { p.vy -= 0.006; p.life -= 0.04; }
-        else if (p.type === 'smoke') { p.mesh.scale.addScalar(0.01); p.life -= 0.02; }
-        else if (p.type === 'blast') { p.mesh.scale.addScalar(0.015); p.life -= 0.05; }
-        
-        p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
-        if (p.mesh.material) p.mesh.material.opacity = p.life * (p.type === 'smoke' ? 0.4 : p.type === 'blast' ? 0.5 : 1.0);
-        if (p.life <= 0) { scene.remove(p.mesh); particleSystems.splice(i, 1); }
-    }
-}
-
 // =========================================================================
-// 4. ITEM / HAND HELD EQUIPMENT
+// 4. PLAYER ARSENAL VIEWPORTS
 // =========================================================================
 const axeGroup = new THREE.Group();
 const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.15, 0.1), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
@@ -225,7 +198,7 @@ function updateAxeAnimationLoop() {
 }
 
 // =========================================================================
-// 5. THE 6 DETAILED STRATEGIC SAFETY FIREPITS
+// 5. RESTORED ORIGINAL 4 SAFETY FIREPITS
 // =========================================================================
 function buildFirepit(cx, cz) {
     const cy = getGroundYAt(cx, cz) + 1; const group = new THREE.Group();
@@ -238,7 +211,7 @@ function buildFirepit(cx, cz) {
     fireMesh.position.y = 0.25; group.add(fireMesh);
     group.position.set(cx, cy - 0.4, cz); scene.add(group);
     
-    const pLight = new THREE.PointLight(0xf97316, 0, 11, 1.5); pLight.position.set(cx, cy + 0.3, cz); scene.add(pLight);
+    const pLight = new THREE.PointLight(0xf97316, 0, 10, 1.5); pLight.position.set(cx, cy + 0.3, cz); scene.add(pLight);
     firepitsArray.push({ mesh: group, fire: fireMesh, light: pLight, x: cx, y: cy, z: cz, smokeTimer: 0 });
 }
 
@@ -247,17 +220,11 @@ function updateFirepitsLoop() {
         const pulse = 1.0 + Math.sin(Date.now() * 0.004) * 0.1;
         f.fire.scale.set(pulse, pulse, pulse);
         f.smokeTimer += 1; if (f.smokeTimer % 30 === 0) spawnSmokeParticle(f.x, f.y, f.z);
-        
-        const dx = camera.position.x - f.x; const dz = camera.position.z - f.z; const dist = Math.sqrt(dx*dx + dz*dz);
-        if (dist < 1.1 && Math.abs(camera.position.y - f.y) < 1.5) {
-            playerVelocityY = 0.12; camera.position.x += Math.sign(dx) * 0.2; camera.position.z += Math.sign(dz) * 0.2;
-            playSound('jump2');
-        }
     });
 }
 
 // =========================================================================
-// 6. NIGHT ZOMBIE HUNTING & FIREPIT REPELLENT ARTIFICIAL INTELLIGENCE
+// 6. SURVIVAL ZOMBIES WITH SAFE PATH PLANNING AI
 // =========================================================================
 function buildZombieMesh() {
     const group = new THREE.Group();
@@ -270,9 +237,9 @@ function buildZombieMesh() {
 
 function manageZombieSpawnsAndSunburns() {
     if (currentDayFactor < 0.35) {
-        if (activeZombies.length < 8 && Math.random() > 0.96) { 
+        if (activeZombies.length < 5 && Math.random() > 0.96) { 
             const rx = 5 + Math.random() * (WORLD_SIZE - 10); const rz = 5 + Math.random() * (WORLD_SIZE - 10);
-            let safe = true; firepitsArray.forEach(f => { if(Math.sqrt(Math.pow(rx-f.x,2)+Math.pow(rz-f.z,2)) < 11) safe = false; });
+            let safe = true; firepitsArray.forEach(f => { if(Math.sqrt(Math.pow(rx-f.x,2)+Math.pow(rz-f.z,2)) < 10) safe = false; });
             if (safe) {
                 const ry = getGroundYAt(rx, rz); const zm = buildZombieMesh(); zm.position.set(rx, ry, rz); scene.add(zm);
                 activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 2 });
@@ -287,20 +254,20 @@ function manageZombieSpawnsAndSunburns() {
 }
 
 function updateZombiesLoop() {
-    const Z_SPEED = 0.032;
+    const Z_SPEED = 0.03;
     activeZombies.forEach(z => {
         let dx = camera.position.x - z.mesh.position.x; let dz = camera.position.z - z.mesh.position.z;
         let pDist = Math.sqrt(dx*dx + dz*dz);
 
         let nearFire = null;
-        firepitsArray.forEach(f => { if (Math.sqrt(Math.pow(z.mesh.position.x-f.x,2)+Math.pow(z.mesh.position.z-f.z,2)) < 11) nearFire = f; });
+        firepitsArray.forEach(f => { if (Math.sqrt(Math.pow(z.mesh.position.x-f.x,2)+Math.pow(z.mesh.position.z-f.z,2)) < 10) nearFire = f; });
 
         if (nearFire) {
             let fdx = z.mesh.position.x - nearFire.x; let fdz = z.mesh.position.z - nearFire.z;
             let ang = Math.atan2(fdz, fdx);
-            z.mesh.position.x += Math.cos(ang) * Z_SPEED * 1.25; z.mesh.position.z += Math.sin(ang) * Z_SPEED * 1.25;
+            z.mesh.position.x += Math.cos(ang) * Z_SPEED * 1.2; z.mesh.position.z += Math.sin(ang) * Z_SPEED * 1.2;
             z.mesh.rotation.y = -ang + Math.PI/2;
-        } else if (pDist < 24) {
+        } else if (pDist < 20) {
             let ang = Math.atan2(dz, dx);
             z.mesh.position.x += Math.cos(ang) * Z_SPEED; z.mesh.position.z += Math.sin(ang) * Z_SPEED;
             z.mesh.rotation.y = -ang - Math.PI/2;
@@ -315,10 +282,10 @@ function updateZombiesLoop() {
 }
 
 // =========================================================================
-// 7. DECORATIVE FAUNA / ANIMALS ENGINE
+// 7. RESTORED FAUNA/ANIMALS ENGINE
 // =========================================================================
 function spawnAnimals() {
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 4; i++) {
         const rx = 8 + Math.random() * (WORLD_SIZE - 16); const rz = 8 + Math.random() * (WORLD_SIZE - 16);
         const ry = getGroundYAt(rx, rz) + 0.25;
         const group = new THREE.Group();
@@ -344,7 +311,7 @@ function updateAnimalsLoop() {
 }
 
 // =========================================================================
-// 8. PROCEDURAL WORLD SCENERY AND SWIMMING POOL ARRANGEMENTS
+// 8. SANDBOX GENERATION: REVERTED TO standard 80x80 LANDSCAPE
 // =========================================================================
 function spawnTree(tx, tz) {
     const sy = getGroundYAt(tx, tz) + 1;
@@ -353,48 +320,34 @@ function spawnTree(tx, tz) {
 }
 
 function generateDefaultWorld() {
-    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.012);
+    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
     
-    // Balanced Pool Settings placed centered on the 80x80 layout
-    const pX = 50, pZ = 50, pRad = 6;
-
+    // Generates flat terrain without any pools or excess layout fencing
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
-            const distToPool = Math.sqrt(Math.pow(x - pX, 2) + Math.pow(z - pZ, 2));
-            const isPool = distToPool < pRad;
-            const isFenceLine = (Math.abs(distToPool - (pRad + 1.5)) < 0.5);
-
             createBlock(x, 0, z, 'stone', true);
-            if (isPool) {
-                createBlock(x, 1, z, 'water');
-            } else {
-                createBlock(x, 1, z, 'grass');
-                if (isFenceLine && (x % 2 === 0 || z % 2 === 0)) {
-                    createBlock(x, 2, z, 'fence');
-                }
-            }
+            createBlock(x, 1, z, 'grass');
         }
     }
     
-    // Core Map Perimeters
+    // Simple Outer Map Boundary Safety Fencing
     for (let i = 0; i < WORLD_SIZE; i++) {
         createBlock(i, getGroundYAt(i, 0) + 1, 0, 'fence'); createBlock(i, getGroundYAt(i, WORLD_SIZE - 1) + 1, WORLD_SIZE - 1, 'fence');
         createBlock(0, getGroundYAt(0, i) + 1, i, 'fence'); createBlock(WORLD_SIZE - 1, getGroundYAt(WORLD_SIZE - 1, i) + 1, i, 'fence');
     }
 
-    // Distribute Entities across the full 80x80 map grid
-    spawnTree(15, 20); spawnTree(65, 18); spawnTree(20, 60); spawnTree(60, 62);
+    // Classic Sandbox Trees
+    spawnTree(15, 20); spawnTree(60, 25); spawnTree(25, 55);
     
-    // 6 Performance Distributed Firepits
+    // Reverted back to the original 4 core safety firepits
     buildFirepit(20, 20); buildFirepit(60, 20);
     buildFirepit(20, 60); buildFirepit(60, 60);
-    buildFirepit(40, 35); buildFirepit(35, 45);
 
-    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 6);
+    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 4);
 }
 
 // =========================================================================
-// 9. HOTBAR MANAGEMENT PORTAL
+// 9. HOTBAR EQUIPMENT SELECTION TRays
 // =========================================================================
 window.selectSlot = function(type) {
     currentSelectedType = type; playSound('ui');
@@ -403,7 +356,7 @@ window.selectSlot = function(type) {
 };
 
 // =========================================================================
-// 10. INPUT LOOK LOOK & MOBILE SPRINT CONTROLLERS
+// 10. INPUT LOOK LOOK & MOBILE SPRINTING TIMERS
 // =========================================================================
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0, isDraggingCamera = false;
@@ -448,17 +401,15 @@ bindDpadDirection('dpad-left', 'left'); bindDpadDirection('dpad-right', 'right')
 // =========================================================================
 let playerVelocityY = 0, remainingJumpsCount = 3; 
 const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.165, FLOOR_LEVEL_HEIGHT = 4.5;
-let wasPlayerInAir = false;
 
 function triggerJumpAction(e) {
     if (e) e.preventDefault(); initAudio();
     if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
-        playerVelocityY = FORCE_JUMP; remainingJumpsCount = 2; playSound('jump1'); wasPlayerInAir = true;
+        playerVelocityY = FORCE_JUMP; remainingJumpsCount = 2; playSound('jump1');
     } else if (remainingJumpsCount === 2) {
         playerVelocityY = FORCE_JUMP * 0.95; remainingJumpsCount = 1; playSound('jump2');
     } else if (remainingJumpsCount === 1) {
         playerVelocityY = FORCE_JUMP * 1.1; remainingJumpsCount = 0; playSound('jump1');
-        spawnJumpBlastRing(camera.position.x, camera.position.y, camera.position.z);
     }
 }
 document.getElementById('jump-pad').addEventListener('touchstart', triggerJumpAction);
@@ -466,18 +417,11 @@ document.getElementById('jump-pad').addEventListener('mousedown', triggerJumpAct
 
 function processPhysicsPipeline() {
     playerVelocityY -= GRAVITY_CONSTANT; camera.position.y += playerVelocityY;
-    
-    if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
-        camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 3;
-        if(wasPlayerInAir) {
-            wasPlayerInAir = false;
-            for(let i=0; i<3; i++) spawnSmokeParticle(camera.position.x, FLOOR_LEVEL_HEIGHT - 1.5, camera.position.z);
-        }
-    }
+    if (camera.position.y <= FLOOR_LEVEL_HEIGHT) { camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 3; }
 }
 
 // =========================================================================
-// 12. RAYCAST INTERFACES
+// 12. RAYCAST TOOLS
 // =========================================================================
 const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
 
@@ -493,9 +437,7 @@ function handleBlockAction(isPlacement) {
             if (zombie) {
                 playSound('break'); zombie.hitpoints -= 1;
                 spawnBlockBreakParticles(zombie.mesh.position.x, zombie.mesh.position.y+0.4, zombie.mesh.position.z, 0x16a34a);
-                if (zombie.hitpoints <= 0) {
-                    playSound('death'); scene.remove(zombie.mesh); activeZombies = activeZombies.filter(z => z !== zombie);
-                }
+                if (zombie.hitpoints <= 0) { playSound('death'); scene.remove(zombie.mesh); activeZombies = activeZombies.filter(z => z !== zombie); }
                 return;
             }
         }
@@ -505,8 +447,7 @@ function handleBlockAction(isPlacement) {
     if (intersects.length > 0 && intersects[0].distance < 7) {
         const block = intersects[0].object; if (block.userData.blockType === 'water') return;
         if (!isPlacement) {
-            playSound('break');
-            spawnBlockBreakParticles(block.position.x, block.position.y, block.position.z, 0x557a2b);
+            playSound('break'); spawnBlockBreakParticles(block.position.x, block.position.y, block.position.z, 0x557a2b);
             scene.remove(block); activeBlocks = activeBlocks.filter(b => b !== block);
         } else {
             playSound('place'); const n = intersects[0].face.normal;
@@ -521,7 +462,7 @@ document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.pr
 document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
 
 // =========================================================================
-// 13. SNAPSHOT SAVES
+// 13. DATA PERSISTENCE PIPELINES
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui'); const data = activeBlocks.map(b => ({ x: b.position.x, y: b.position.y, z: b.position.z, type: b.userData.blockType }));
@@ -533,7 +474,7 @@ window.loadWorld = function() {
 };
 
 // =========================================================================
-// 14. TICK RUN TIME TICK ANIMATION LOOP
+// 14. TICK FRAME ANIMATION TIME RUN LOOP
 // =========================================================================
 function animate() {
     requestAnimationFrame(animate);
@@ -553,7 +494,7 @@ function animate() {
     camera.position.x = Math.max(1.2, Math.min(WORLD_SIZE - 2.2, camera.position.x));
     camera.position.z = Math.max(1.2, Math.min(WORLD_SIZE - 2.2, camera.position.z));
 
-    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); updateParticles(); updateDayNightCycle();
+    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); updateDayNightCycle();
     renderer.render(scene, camera);
 }
 
