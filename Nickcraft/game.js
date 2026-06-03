@@ -1,72 +1,91 @@
 // =========================================================================
-// 0. AUDIO CONTEXT ENGINE
+// 0. COMPREHENSIVE AUDIO ENGINE REPERTOIRE
 // =========================================================================
 let audioCtx = null;
-
-function initAudio() {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-}
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
 
 function playSound(type) {
-    initAudio();
-    if (!audioCtx) return;
+    initAudio(); if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
+    osc.connect(gainNode); gainNode.connect(audioCtx.destination);
     const now = audioCtx.currentTime;
 
     if (type === 'break') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(130, now);
-        osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
-        gainNode.gain.setValueAtTime(0.4, now);
-        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(120, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.15);
+        gainNode.gain.setValueAtTime(0.4, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
         osc.start(now); osc.stop(now + 0.15);
     } else if (type === 'death') {
-        // High pitched supernatural poof sound for animal ghosts
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, now);
-        osc.frequency.exponentialRampToValueAtTime(900, now + 0.4);
-        gainNode.gain.setValueAtTime(0.3, now);
-        gainNode.gain.linearRampToValueAtTime(0.001, now + 0.4);
-        osc.start(now); osc.stop(now + 0.4);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.35);
+        gainNode.gain.setValueAtTime(0.25, now); gainNode.gain.linearRampToValueAtTime(0.001, now + 0.35);
+        osc.start(now); osc.stop(now + 0.35);
     } else if (type === 'place') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(180, now);
-        osc.frequency.exponentialRampToValueAtTime(260, now + 0.08);
-        gainNode.gain.setValueAtTime(0.3, now);
-        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.08);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(170, now);
+        osc.frequency.exponentialRampToValueAtTime(230, now + 0.08);
+        gainNode.gain.setValueAtTime(0.3, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.08);
         osc.start(now); osc.stop(now + 0.08);
     } else if (type === 'jump1') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(150, now);
-        osc.frequency.exponentialRampToValueAtTime(300, now + 0.12);
-        gainNode.gain.setValueAtTime(0.2, now);
-        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.type = 'triangle'; osc.frequency.setValueAtTime(140, now);
+        osc.frequency.exponentialRampToValueAtTime(280, now + 0.12);
+        gainNode.gain.setValueAtTime(0.18, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.12);
         osc.start(now); osc.stop(now + 0.12);
     } else if (type === 'jump2') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(350, now);
-        osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
-        gainNode.gain.setValueAtTime(0.25, now);
-        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
-        osc.start(now); osc.stop(now + 0.15);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(580, now + 0.14);
+        gainNode.gain.setValueAtTime(0.22, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.14);
+        osc.start(now); osc.stop(now + 0.14);
+    } else if (type === 'crackle') {
+        osc.type = 'square'; osc.frequency.setValueAtTime(80 + Math.random() * 60, now);
+        gainNode.gain.setValueAtTime(0.15, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now); osc.stop(now + 0.05);
     } else if (type === 'ui') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(500, now);
-        gainNode.gain.setValueAtTime(0.08, now);
-        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.04);
-        osc.start(now); osc.stop(now + 0.04);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
+        gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.05);
+        osc.start(now); osc.stop(now + 0.05);
     }
 }
 
+// =========================================================================
+// 1. SCENE SETUP & CYCLING DAY-NIGHT ENVIRONMENT
+// =========================================================================
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xffffff, 0.6);
+sunLight.position.set(40, 80, 20);
+sunLight.castShadow = true;
+scene.add(sunLight);
+
+let worldTime = 0; // Ticks forward continually inside main frame render loops
+function updateDayNightCycle() {
+    worldTime += 0.002;
+    const dayFactor = (Math.sin(worldTime) + 1) / 2; // Range: [0 to 1] smoothly looping
+    
+    // Lerp colors across beautiful deep night dark indigo to daytime blue skybox maps
+    const skyColor = new THREE.Color(0x111827).lerp(new THREE.Color(0x87CEEB), dayFactor);
+    scene.background = skyColor;
+    if (scene.fog) scene.fog.color = skyColor;
+    
+    ambientLight.intensity = 0.2 + (dayFactor * 0.5);
+    sunLight.intensity = dayFactor * 0.7;
+    sunLight.position.x = Math.cos(worldTime) * 60;
+    sunLight.position.y = Math.sin(worldTime) * 60;
+}
+
+// =========================================================================
+// 2. MATERIALS & VOXEL TEXTURES ENGINE
+// =========================================================================
 function createVoxelTexture(baseColor, noiseColor, style) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 16; canvas.height = 16;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = baseColor;
-    ctx.fillRect(0, 0, 16, 16);
+    const canvas = document.createElement('canvas'); canvas.width = 16; canvas.height = 16;
+    const ctx = canvas.getContext('2d'); ctx.fillStyle = baseColor; ctx.fillRect(0, 0, 16, 16);
     ctx.fillStyle = noiseColor;
     for (let i = 0; i < 16; i++) {
         for (let j = 0; j < 16; j++) {
@@ -75,100 +94,91 @@ function createVoxelTexture(baseColor, noiseColor, style) {
         }
     }
     const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter;
-    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter; texture.minFilter = THREE.NearestFilter;
     return texture;
 }
 
-// =========================================================================
-// 1. ENGINE INITIALIZATION
-// =========================================================================
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
-
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-directionalLight.position.set(60, 80, 40);
-directionalLight.castShadow = true;
-scene.add(directionalLight);
-
-// =========================================================================
-// 2. MATERIALS & WORLD GRID SETUP
-// =========================================================================
 const materials = {
     grass: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#557a2b', '#3f5e1f', 'noise') }),
     dirt: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#866043', '#66462c', 'noise') }),
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
-    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.8 }),
-    fence: new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 }), // Custom dark brown fence texture
+    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.75 }),
+    fence: new THREE.MeshStandardMaterial({ color: 0x92400e, roughness: 0.7 }),
+    coal: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#262626', '#171717', 'noise') }),
     logo: new THREE.MeshStandardMaterial({ color: 0xd946ef })
 };
 
 const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
-let activeBlocks = []; 
-let activeAnimals = []; // Tracks moving entity states separately
-let currentSelectedType = 'grass'; 
-const WORLD_SIZE = 48;
+let activeBlocks = []; let activeAnimals = []; let firepitsArray = []; let particleSystems = [];
+let currentSelectedType = 'grass'; const WORLD_SIZE = 48;
 
 function createBlock(x, y, z, type) {
     const material = materials[type] || materials.grass;
     const mesh = new THREE.Mesh(blockGeometry, material);
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData = { blockType: type };
-    scene.add(mesh);
-    activeBlocks.push(mesh);
+    mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.userData = { blockType: type }; scene.add(mesh); activeBlocks.push(mesh);
     return mesh;
 }
 
 function clearCurrentWorld() {
-    activeBlocks.forEach(block => scene.remove(block));
-    activeAnimals.forEach(a => scene.remove(a.mesh));
-    activeBlocks = [];
-    activeAnimals = [];
+    activeBlocks.forEach(b => scene.remove(b)); activeAnimals.forEach(a => scene.remove(a.mesh));
+    firepitsArray.forEach(f => scene.remove(f.mesh));
+    activeBlocks = []; activeAnimals = []; firepitsArray = [];
 }
 
-// Helper to determine accurate ground y position anywhere on the terrain grid
 function getGroundYAt(x, z) {
-    let highestY = 2; // Baseline default grass height
+    let highestY = 2;
     activeBlocks.forEach(b => {
         if (Math.round(b.position.x) === Math.round(x) && Math.round(b.position.z) === Math.round(z)) {
-            if (b.userData.blockType !== 'water' && b.position.y > highestY) {
-                highestY = b.position.y;
-            }
+            if (b.userData.blockType !== 'water' && b.position.y > highestY) highestY = b.position.y;
         }
     });
     return highestY;
 }
 
 // =========================================================================
-// 3. RE-PROPORTIONED MINI AXE
+// 3. SHARD PARTICLES DESTRUCTION SYSTEM
+// =========================================================================
+function spawnBlockBreakParticles(x, y, z, colorHex) {
+    const count = 12; const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const mat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.6 });
+    
+    for (let i = 0; i < count; i++) {
+        const p = new THREE.Mesh(geo, mat);
+        p.position.set(x + (Math.random() - 0.5) * 0.5, y + (Math.random() - 0.5) * 0.5, z + (Math.random() - 0.5) * 0.5);
+        scene.add(p);
+        particleSystems.push({
+            mesh: p,
+            vx: (Math.random() - 0.5) * 0.1,
+            vy: 0.1 + Math.random() * 0.1,
+            vz: (Math.random() - 0.5) * 0.1,
+            life: 1.0
+        });
+    }
+}
+
+function updateParticles() {
+    for (let i = particleSystems.length - 1; i >= 0; i--) {
+        const p = particleSystems[i]; p.vy -= 0.007; // gravity pull vector
+        p.mesh.position.x += p.vx; p.mesh.position.y += p.vy; p.mesh.position.z += p.vz;
+        p.life -= 0.02;
+        if (p.life <= 0) { scene.remove(p.mesh); particleSystems.splice(i, 1); }
+    }
+}
+
+// =========================================================================
+// 4. DOWNSIZED MINI AXE & SWING ANIMATIONS
 // =========================================================================
 const axeGroup = new THREE.Group();
-const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.14), new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2 }));
-bladeMesh.position.set(0, 0.22, -0.05);
-axeGroup.add(bladeMesh);
+const blade = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.16, 0.12), new THREE.MeshStandardMaterial({ color: 0xcccccc }));
+blade.position.set(0, 0.2, -0.04); axeGroup.add(blade);
+const handle = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.4, 0.02), new THREE.MeshStandardMaterial({ color: 0x78350f }));
+handle.position.set(0, 0.04, 0); axeGroup.add(handle);
 
-const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.45, 0.02), new THREE.MeshStandardMaterial({ color: 0x92400e }));
-handleMesh.position.set(0, 0.05, 0);
-axeGroup.add(handleMesh);
-
-axeGroup.scale.set(0.75, 0.75, 0.75);
-axeGroup.position.set(0.42, -0.42, -0.6); 
-axeGroup.rotation.set(0, Math.PI / 4, 0);
-camera.add(axeGroup);
-scene.add(camera);
+axeGroup.scale.set(0.7, 0.7, 0.7); axeGroup.position.set(0.42, -0.42, -0.6);
+axeGroup.rotation.set(0, Math.PI / 4, 0); camera.add(axeGroup); scene.add(camera);
 
 let axeSwingTimer = 0, isAxeSwinging = false;
 function triggerAxeSwingAnimation() { if (!isAxeSwinging) { isAxeSwinging = true; axeSwingTimer = 0; } }
@@ -176,61 +186,93 @@ function triggerAxeSwingAnimation() { if (!isAxeSwinging) { isAxeSwinging = true
 function updateAxeAnimationLoop() {
     if (!isAxeSwinging) {
         axeGroup.position.lerp(new THREE.Vector3(0.42, -0.42, -0.6), 0.1);
-        axeGroup.rotation.set(0, Math.PI / 4, 0);
-        return;
+        axeGroup.rotation.set(0, Math.PI / 4, 0); return;
     }
-    axeSwingTimer += 0.2;
-    if (axeSwingTimer >= Math.PI) { isAxeSwinging = false; return; }
-    const factor = Math.sin(axeSwingTimer);
-    axeGroup.position.z = -0.6 - (factor * 0.12);
-    axeGroup.position.y = -0.42 + (factor * 0.05);
-    axeGroup.rotation.x = -factor * 1.4; 
+    axeSwingTimer += 0.22; if (axeSwingTimer >= Math.PI) { isAxeSwinging = false; return; }
+    const f = Math.sin(axeSwingTimer); axeGroup.position.z = -0.6 - (f * 0.14);
+    axeGroup.position.y = -0.42 + (f * 0.06); axeGroup.rotation.x = -f * 1.5;
 }
 
 // =========================================================================
-// 4. ANIMALS BUILDER MACHINE (HORSE, DOGS, CATS, PIGS)
+// 5. 2 INTERACTIVE FIREPITS WITH ANIMATED CORES
+// =========================================================================
+function buildFirepit(cx, cz) {
+    const cy = getGroundYAt(cx, cz) + 1;
+    const group = new THREE.Group();
+    
+    // Outer coal ring
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.3, 1.2), materials.coal);
+    group.add(base);
+    
+    // Flashing inner fire mesh components
+    const fireGeo = new THREE.BoxGeometry(0.7, 0.6, 0.7);
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xea580c, transparent: true, opacity: 0.9 });
+    const fireMesh = new THREE.Mesh(fireGeo, fireMat);
+    fireMesh.position.y = 0.3;
+    group.add(fireMesh);
+    
+    group.position.set(cx, cy - 0.4, cz);
+    scene.add(group);
+    
+    firepitsArray.push({ mesh: group, fire: fireMesh, x: cx, y: cy, z: cz });
+}
+
+function updateFirepitsLoop() {
+    firepitsArray.forEach(f => {
+        // Randomly pulse scales to look like flickering fire
+        const pulse = 0.8 + Math.sin(Date.now() * 0.01) * 0.15;
+        f.fire.scale.set(pulse, 1.0 + Math.sin(Date.now() * 0.02) * 0.2, pulse);
+        
+        // Randomly alter fire color filters between yellow/orange/red
+        if (Math.random() > 0.85) {
+            f.fire.material.color.setHex(Math.random() > 0.5 ? 0xf59e0b : 0xdc2626);
+            if (Math.random() > 0.7) playSound('crackle');
+        }
+        
+        // Interaction: Check distance between player camera position and firepit core
+        const dx = camera.position.x - f.x;
+        const dz = camera.position.z - f.z;
+        const dist = Math.sqrt(dx*dx + dz*dz);
+        if (dist < 1.1 && Math.abs(camera.position.y - f.y) < 1.8) {
+            // "Singe Bounce" knockback push up/away effect
+            playerVelocityY = 0.14; 
+            camera.position.x += (dx === 0 ? 0.2 : Math.sign(dx) * 0.25);
+            camera.position.z += (dz === 0 ? 0.2 : Math.sign(dz) * 0.25);
+            playSound('jump2');
+        }
+    });
+}
+
+// =========================================================================
+// 6. ANIMALS WITH SMARTER ARTIFICIAL BEHAVIOR
 // =========================================================================
 const animalConfig = [
-    { type: 'horse', color: 0x78350f, size: [0.7, 0.8, 1.2], count: 1 },
-    { type: 'dog', color: 0xd97706, size: [0.4, 0.5, 0.7], count: 2 },
-    { type: 'cat', color: 0xf59e0b, size: [0.3, 0.35, 0.5], count: 2 },
-    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.8], count: 3 }
+    { type: 'horse', color: 0x5c2d17, size: [0.7, 0.8, 1.1], count: 1 },
+    { type: 'dog', color: 0xc2410c, size: [0.4, 0.45, 0.65], count: 2 },
+    { type: 'cat', color: 0xd97706, size: [0.3, 0.3, 0.45], count: 2 },
+    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.75], count: 3 }
 ];
 
 function spawnAnimals() {
     animalConfig.forEach(cfg => {
         for (let i = 0; i < cfg.count; i++) {
-            // Pick arbitrary coordinates away from the center/spawn zone
-            const rx = Math.floor(5 + Math.random() * (WORLD_SIZE - 10));
-            const rz = Math.floor(5 + Math.random() * (WORLD_SIZE - 10));
-            const ry = getGroundYAt(rx, rz) + (cfg.size[1] / 2) + 0.5;
+            const rx = Math.floor(6 + Math.random() * (WORLD_SIZE - 12));
+            const rz = Math.floor(6 + Math.random() * (WORLD_SIZE - 12));
+            const ry = getGroundYAt(rx, rz) + (cfg.size[1]/2) + 0.5;
 
             const group = new THREE.Group();
+            const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.85 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), bodyMat); body.castShadow = true; group.add(body);
             
-            // Core main torso block
-            const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.8 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), bodyMat);
-            body.castShadow = true;
-            group.add(body);
-
-            // Miniature head box attachment offset
-            const headSize = cfg.size[0] * 0.8;
+            const headSize = cfg.size[0] * 0.75;
             const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), bodyMat);
-            head.position.set(0, cfg.size[1] * 0.5, -cfg.size[2] * 0.5);
-            head.castShadow = true;
-            group.add(head);
+            head.position.set(0, cfg.size[1]*0.4, -cfg.size[2]*0.45); head.castShadow = true; group.add(head);
 
-            group.position.set(rx, ry, rz);
-            scene.add(group);
+            group.position.set(rx, ry, rz); scene.add(group);
 
             activeAnimals.push({
-                mesh: group,
-                type: cfg.type,
-                isGhost: false,
-                ghostTimer: 0,
-                moveTimer: Math.random() * 5,
-                vx: 0, vz: 0,
-                baseYOffset: cfg.size[1] / 2
+                mesh: group, type: cfg.type, colorHex: cfg.color, isGhost: false, ghostTimer: 0,
+                moveTimer: Math.random() * 4, vx: 0, vz: 0, bY: cfg.size[1]/2
             });
         }
     });
@@ -239,64 +281,54 @@ function spawnAnimals() {
 function updateAnimalsLoop() {
     activeAnimals.forEach(a => {
         if (a.isGhost) {
-            // Ghost flying away logic
-            a.mesh.position.y += 0.08;
-            a.mesh.rotation.y += 0.04;
-            a.ghostTimer += 0.016;
-            
-            // Linearly drop transparency levels matching ghost ascension curves
-            a.mesh.children.forEach(child => {
-                if (child.material) {
-                    child.material.opacity = Math.max(0, 1 - (a.ghostTimer / 1.5));
-                }
-            });
-
-            if (a.ghostTimer >= 1.5) {
-                scene.remove(a.mesh);
-                activeAnimals = activeAnimals.filter(item => item !== a);
-            }
+            a.mesh.position.y += 0.09; a.mesh.rotation.y += 0.05; a.ghostTimer += 0.016;
+            a.mesh.children.forEach(c => { if (c.material) c.material.opacity = Math.max(0, 1 - (a.ghostTimer / 1.4)); });
+            if (a.ghostTimer >= 1.4) { scene.remove(a.mesh); activeAnimals = activeAnimals.filter(item => item !== a); }
             return;
         }
 
-        // Standard animal wandering kinematics
         a.moveTimer -= 0.016;
         if (a.moveTimer <= 0) {
-            a.moveTimer = 2 + Math.random() * 4;
-            if (Math.random() > 0.4) {
+            a.moveTimer = 3 + Math.random() * 3;
+            
+            // Smarter behavior paths
+            if (a.type === 'pig') {
+                // Pigs gravitate toward the muddy puddle center at coords (30, 32)
+                const dx = 30 - a.mesh.position.x; const dz = 32 - a.mesh.position.z;
+                const angle = Math.atan2(dz, dx) + (Math.random() - 0.5);
+                a.vx = Math.cos(angle) * 0.025; a.vz = Math.sin(angle) * 0.025;
+                a.mesh.rotation.y = -angle + Math.PI/2;
+            } else if (a.type === 'horse' && Math.random() > 0.75) {
+                // Horses sometimes pause to "eat" grass blocks underneath them, turning them into dirt
+                a.vx = 0; a.vz = 0;
+                const hx = Math.round(a.mesh.position.x); const hz = Math.round(a.mesh.position.z);
+                activeBlocks.forEach(b => {
+                    if (Math.round(b.position.x) === hx && Math.round(b.position.z) === hz && b.userData.blockType === 'grass') {
+                        b.material = materials.dirt; b.userData.blockType = 'dirt';
+                    }
+                });
+            } else if (Math.random() > 0.3) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 0.03;
-                a.vx = Math.cos(angle) * speed;
-                a.vz = Math.sin(angle) * speed;
+                a.vx = Math.cos(angle) * 0.03; a.vz = Math.sin(angle) * 0.03;
                 a.mesh.rotation.y = -angle + Math.PI/2;
             } else {
                 a.vx = 0; a.vz = 0;
             }
         }
 
-        a.mesh.position.x += a.vx;
-        a.mesh.position.z += a.vz;
-
-        // Contain animal coords tightly inside perimeter lines
+        a.mesh.position.x += a.vx; a.mesh.position.z += a.vz;
         a.mesh.position.x = Math.max(2, Math.min(WORLD_SIZE - 2, a.mesh.position.x));
         a.mesh.position.z = Math.max(2, Math.min(WORLD_SIZE - 2, a.mesh.position.z));
-
-        // Snap vertical alignment tightly down over terrain levels 
-        const currentGround = getGroundYAt(a.mesh.position.x, a.mesh.position.z);
-        a.mesh.position.y = currentGround + 0.5 + a.baseYOffset;
+        a.mesh.position.y = getGroundYAt(a.mesh.position.x, a.mesh.position.z) + 0.5 + a.bY;
     });
 }
 
 // =========================================================================
-// 5. LANDSCAPE GENERATION WITH WOODEN PERIMETER FENCES
+// 7. WORLD LANDSCAPE PLANTING GENERATION ARCHITECTURE
 // =========================================================================
 function spawnTree(trunkX, trunkZ, customHeight = 4) {
-    // Look up surface geometry to ensure precise grounding
-    const surfaceY = getGroundYAt(trunkX, trunkZ);
-    const startY = surfaceY + 1;
-
-    for (let h = 0; h < customHeight; h++) {
-        createBlock(trunkX, startY + h, trunkZ, 'wood');
-    }
+    const surfaceY = getGroundYAt(trunkX, trunkZ); const startY = surfaceY + 1;
+    for (let h = 0; h < customHeight; h++) createBlock(trunkX, startY + h, trunkZ, 'wood');
     const leafHeight = startY + customHeight;
     for (let lx = -1; lx <= 1; lx++) {
         for (let lz = -1; lz <= 1; lz++) {
@@ -308,131 +340,98 @@ function spawnTree(trunkX, trunkZ, customHeight = 4) {
 }
 
 function generateDefaultWorld() {
-    clearCurrentWorld();
-    
-    const hillCenterX = 12, hillCenterZ = 14;
-    const puddleCenterX = 30, puddleCenterZ = 32;
+    clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
+    const hillCenterX = 12, hillCenterZ = 14; const puddleCenterX = 30, puddleCenterZ = 32;
 
-    // Phase 1: Build base floor and hill terrains
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
             const distToHill = Math.sqrt(Math.pow(x - hillCenterX, 2) + Math.pow(z - hillCenterZ, 2));
-            let hillHeight = 0;
-            if (distToHill < 8) hillHeight = Math.round((8 - distToHill) * 0.6);
-
+            let hillHeight = 0; if (distToHill < 8) hillHeight = Math.round((8 - distToHill) * 0.6);
             const distToPuddle = Math.sqrt(Math.pow(x - puddleCenterX, 2) + Math.pow(z - puddleCenterZ, 2));
             const isPuddle = distToPuddle < 5;
 
             createBlock(x, 0, z, 'stone');
-            
             if (isPuddle) {
-                createBlock(x, 1, z, 'stone');
-                createBlock(x, 2, z, 'water');
+                createBlock(x, 1, z, 'stone'); createBlock(x, 2, z, 'water');
             } else {
-                createBlock(x, 1, z, 'dirt');
-                createBlock(x, 2, z, 'grass');
-                for (let h = 0; h < hillHeight; h++) {
-                    createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
-                }
+                createBlock(x, 1, z, 'dirt'); createBlock(x, 2, z, 'grass');
+                for (let h = 0; h < hillHeight; h++) createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
             }
         }
     }
     
-    // Phase 2: Generate fence barriers around edges
+    // Perimeter fences pass
     for (let i = 0; i < WORLD_SIZE; i++) {
-        // North & South Edges
-        const gyN = getGroundYAt(i, 0); createBlock(i, gyN + 1, 0, 'fence');
-        const gyS = getGroundYAt(i, WORLD_SIZE - 1); createBlock(i, gyS + 1, WORLD_SIZE - 1, 'fence');
-        
-        // East & West Edges
-        const gyE = getGroundYAt(0, i); createBlock(0, gyE + 1, i, 'fence');
-        const gyW = getGroundYAt(WORLD_SIZE - 1, i); createBlock(WORLD_SIZE - 1, gyW + 1, i, 'fence');
+        createBlock(i, getGroundYAt(i, 0) + 1, 0, 'fence');
+        createBlock(i, getGroundYAt(i, WORLD_SIZE - 1) + 1, WORLD_SIZE - 1, 'fence');
+        createBlock(0, getGroundYAt(0, i) + 1, i, 'fence');
+        createBlock(WORLD_SIZE - 1, getGroundYAt(WORLD_SIZE - 1, i) + 1, i, 'fence');
     }
 
-    // Phase 3: Plant completely grounded trees
-    spawnTree(8, 26, 4);   
-    spawnTree(38, 14, 4);  
-    spawnTree(12, 14, 5);  // Perfectly sits on top of hill now!
-    spawnTree(22, 38, 3);  
+    // Grounded Trees
+    spawnTree(8, 26, 4); spawnTree(38, 14, 4); spawnTree(12, 14, 5); spawnTree(22, 38, 3);
+    
+    // Plant 2 Interactive Firepits
+    buildFirepit(18, 20); buildFirepit(32, 15);
 
-    spawnAnimals();
-    camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 4);
+    spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 4);
 }
 
-generateDefaultWorld();
+// =========================================================================
+// 8. GRAPHIC INVENTORY SELECTION HOTBAR CONNECTIONS
+// =========================================================================
+window.selectSlot = function(type) {
+    currentSelectedType = type; playSound('ui');
+    document.querySelectorAll('.hotbar-slot').forEach(slot => slot.classList.remove('active-slot'));
+    const targetedSlot = document.getElementById(`slot-${type}`);
+    if (targetedSlot) targetedSlot.classList.add('active-slot');
+};
 
 // =========================================================================
-// 6. CAMERA LOOK DRAG CHANNELS
+// 9. INPUT CONTROL ROUTERS (CROSS-DEVICE DESIGN LAYOUTS)
 // =========================================================================
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0, isDraggingCamera = false;
-
-function getEventCoords(e) {
-    if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    return { x: e.clientX, y: e.clientY };
-}
+function getEventCoords(e) { return e.touches && e.touches.length > 0 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY }; }
 
 function startTracking(e) {
     if (e.target.closest('#menu') || e.target.closest('.touch-zone')) return;
-    initAudio(); isDraggingCamera = true;
-    const coords = getEventCoords(e);
-    lastTrackX = coords.x; lastTrackY = coords.y;
+    initAudio(); isDraggingCamera = true; const c = getEventCoords(e); lastTrackX = c.x; lastTrackY = c.y;
 }
-
 function moveTracking(e) {
-    if (!isDraggingCamera) return;
-    const coords = getEventCoords(e);
-    const deltaX = coords.x - lastTrackX; const deltaY = coords.y - lastTrackY;
-    lastTrackX = coords.x; lastTrackY = coords.y;
-
-    euler.setFromQuaternion(camera.quaternion);
-    euler.y -= deltaX * 0.005; euler.x -= deltaY * 0.005;
+    if (!isDraggingCamera) return; const c = getEventCoords(e);
+    const dx = c.x - lastTrackX; const dy = c.y - lastTrackY; lastTrackX = c.x; lastTrackY = c.y;
+    euler.setFromQuaternion(camera.quaternion); euler.y -= dx * 0.0045; euler.x -= dy * 0.0045;
     euler.x = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, euler.x));
     camera.quaternion.setFromEuler(euler);
 }
+document.addEventListener('touchstart', startTracking, { passive: true }); document.addEventListener('touchmove', moveTracking, { passive: true });
+document.addEventListener('touchend', () => isDraggingCamera = false); document.addEventListener('mousedown', startTracking);
+document.addEventListener('mousemove', moveTracking); document.addEventListener('mouseup', () => isDraggingCamera = false);
 
-document.addEventListener('touchstart', startTracking, { passive: true });
-document.addEventListener('touchmove', moveTracking, { passive: true });
-document.addEventListener('touchend', () => isDraggingCamera = false);
-document.addEventListener('mousedown', startTracking);
-document.addEventListener('mousemove', moveTracking);
-document.addEventListener('mouseup', () => isDraggingCamera = false);
-
-// =========================================================================
-// 7. MOVEMENT INTERFACE MANAGEMENT (D-PAD STATE ROUTER)
-// =========================================================================
 const moveDirections = { forward: false, backward: false, left: false, right: false };
-
-function bindDpadDirection(elementId, flagName) {
-    const btn = document.getElementById(elementId);
-    const press = (e) => { e.preventDefault(); initAudio(); moveDirections[flagName] = true; };
-    const release = () => { moveDirections[flagName] = false; };
-    
-    btn.addEventListener('touchstart', press); btn.addEventListener('touchend', release);
-    btn.addEventListener('mousedown', press); btn.addEventListener('mouseup', release);
-    btn.addEventListener('mouseleave', release);
+function bindDpadDirection(id, flag) {
+    const el = document.getElementById(id);
+    const press = (e) => { e.preventDefault(); initAudio(); moveDirections[flag] = true; };
+    const release = () => { moveDirections[flag] = false; };
+    el.addEventListener('touchstart', press); el.addEventListener('touchend', release);
+    el.addEventListener('mousedown', press); el.addEventListener('mouseup', release); el.addEventListener('mouseleave', release);
 }
-
-bindDpadDirection('dpad-up', 'forward');
-bindDpadDirection('dpad-down', 'backward');
-bindDpadDirection('dpad-left', 'left');
-bindDpadDirection('dpad-right', 'right');
-
-window.setBlockType = function(t) { currentSelectedType = t; playSound('ui'); };
+bindDpadDirection('dpad-up', 'forward'); bindDpadDirection('dpad-down', 'backward');
+bindDpadDirection('dpad-left', 'left'); bindDpadDirection('dpad-right', 'right');
 
 // =========================================================================
-// 8. PHYSICS ENGINE (JUMP & DOUBLE-JUMP Mechanics)
+// 10. REAL TIME PHYSICS ENGINE WITH MID-AIR DOUBLE JUMP Refresh
 // =========================================================================
-let playerVelocityY = 0, remainingJumpsCount = 2; 
-const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.16, FLOOR_LEVEL_HEIGHT = 4.5; 
+let playerVelocityY = 0, remainingJumpsCount = 2;
+const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.165, FLOOR_LEVEL_HEIGHT = 4.5;
 
 function triggerJumpAction(e) {
-    if (e) e.preventDefault();
-    initAudio();
+    if (e) e.preventDefault(); initAudio();
     if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
         playerVelocityY = FORCE_JUMP; remainingJumpsCount = 1; playSound('jump1');
     } else if (remainingJumpsCount === 1) {
-        playerVelocityY = FORCE_JUMP * 0.95; remainingJumpsCount = 0; playSound('jump2');
+        playerVelocityY = FORCE_JUMP * 0.92; remainingJumpsCount = 0; playSound('jump2');
     }
 }
 document.getElementById('jump-pad').addEventListener('touchstart', triggerJumpAction);
@@ -441,104 +440,91 @@ document.getElementById('jump-pad').addEventListener('mousedown', triggerJumpAct
 function processPhysicsPipeline() {
     playerVelocityY -= GRAVITY_CONSTANT; camera.position.y += playerVelocityY;
     if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
-        camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 2; 
+        camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 2;
     }
 }
 
 // =========================================================================
-// 9. BREAK / PLACE INTERACTION RAYCASTER & GHOST TRIGGER
+// 11. INTERACTION BREAK / PLACE MODES WITH PARTICLE INJECTIONS
 // =========================================================================
-const raycaster = new THREE.Raycaster();
-const screenCenter = new THREE.Vector2(0, 0);
+const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
 
 function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     if (!isPlacement) triggerAxeSwingAnimation();
 
-    // Check animal hits first when hitting BREAK
     if (!isPlacement) {
-        // Collect mesh contents inside standard bounding boxes
-        const animalMeshes = activeAnimals.filter(a => !a.isGhost).map(a => a.mesh.children[0]);
-        const animalIntersects = raycaster.intersectObjects(animalMeshes);
-        
-        if (animalIntersects.length > 0 && animalIntersects[0].distance < 8) {
-            const hitChild = animalIntersects[0].object;
-            const parentGroup = hitChild.parent;
-            const animalObject = activeAnimals.find(a => a.mesh === parentGroup);
-            
-            if (animalObject) {
-                playSound('death');
-                animalObject.isGhost = true; // Flag object to begin ghost ascension update loop
-                
-                // Convert materials to transparent modes
-                parentGroup.children.forEach(child => {
-                    if (child.material) {
-                        child.material = child.material.clone();
-                        child.material.transparent = true;
-                        child.material.color.setHex(0xffffff); // Turn pure ghostly white
-                    }
-                });
+        const meshes = activeAnimals.filter(a => !a.isGhost).map(a => a.mesh.children[0]);
+        const intersects = raycaster.intersectObjects(meshes);
+        if (intersects.length > 0 && intersects[0].distance < 8) {
+            const group = intersects[0].object.parent;
+            const animal = activeAnimals.find(a => a.mesh === group);
+            if (animal) {
+                playSound('death'); animal.isGhost = true;
+                spawnBlockBreakParticles(group.position.x, group.position.y, group.position.z, animal.colorHex);
+                group.children.forEach(c => { if (c.material) { c.material = c.material.clone(); c.material.transparent = true; c.material.color.setHex(0xffffff); } });
                 return;
             }
         }
     }
 
-    // Default block creation / destruction fallback routines
     const intersects = raycaster.intersectObjects(activeBlocks);
-    if (intersects.length > 0 && intersects[0].distance < 10) { 
-        const hitBlock = intersects[0].object;
-        if (hitBlock.userData.blockType === 'water') return;
+    if (intersects.length > 0 && intersects[0].distance < 10) {
+        const block = intersects[0].object; if (block.userData.blockType === 'water') return;
 
         if (!isPlacement) {
-            playSound('break'); scene.remove(hitBlock);
-            activeBlocks = activeBlocks.filter(b => b !== hitBlock);
+            playSound('break');
+            // Sample hex colors dynamically to fire off shards
+            let targetColor = block.material.color ? block.material.color.getHex() : 0xcccccc;
+            spawnBlockBreakParticles(block.position.x, block.position.y, block.position.z, targetColor);
+            scene.remove(block); activeBlocks = activeBlocks.filter(b => b !== block);
         } else {
-            playSound('place'); 
-            const normal = intersects[0].face.normal;
-            createBlock(Math.round(hitBlock.position.x + normal.x), Math.round(hitBlock.position.y + normal.y), Math.round(hitBlock.position.z + normal.z), currentSelectedType);
+            playSound('place'); const n = intersects[0].face.normal;
+            createBlock(Math.round(block.position.x + n.x), Math.round(block.position.y + n.y), Math.round(block.position.z + n.z), currentSelectedType);
         }
     }
 }
 
-document.getElementById('mb-break').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
 document.getElementById('mb-break').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
-document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
+document.getElementById('mb-break').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
 document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
-
+document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
 window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 10. REAL TIME ANIMATION TICK TICK TICK
+// 12. WORLD DATA STORAGE PACKS
 // =========================================================================
-const WALK_SPEED = 0.11; 
+window.saveWorld = function() {
+    playSound('ui');
+    const data = activeBlocks.map(b => ({ x: b.position.x, y: b.position.y, z: b.position.z, type: b.userData.blockType }));
+    localStorage.setItem('nickcraft_v2_save', JSON.stringify(data)); alert('World Snapshot Saved!');
+};
+window.loadWorld = function() {
+    playSound('ui'); const data = localStorage.getItem('nickcraft_v2_save'); if (!data) return alert('No save found!');
+    clearCurrentWorld(); JSON.parse(data).forEach(b => createBlock(b.x, b.y, b.z, b.type)); alert('World Snapshot Loaded!');
+};
 
+// =========================================================================
+// 13. MASTER FRAME RUN TICK LOOP
+// =========================================================================
+const WALK_SPEED = 0.11;
 function animate() {
     requestAnimationFrame(animate);
     
-    const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    forwardVec.y = 0; forwardVec.normalize();
-    const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-    rightVec.y = 0; rightVec.normalize();
+    const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion); forwardVec.y = 0; forwardVec.normalize();
+    const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); rightVec.y = 0; rightVec.normalize();
 
     if (moveDirections.forward) camera.position.addScaledVector(forwardVec, WALK_SPEED);
     if (moveDirections.backward) camera.position.addScaledVector(forwardVec, -WALK_SPEED);
     if (moveDirections.left) camera.position.addScaledVector(rightVec, -WALK_SPEED);
     if (moveDirections.right) camera.position.addScaledVector(rightVec, WALK_SPEED);
-    
-    // Lock character position safely inside fence walls
+
     camera.position.x = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.x));
     camera.position.z = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.z));
 
-    processPhysicsPipeline();
-    updateAxeAnimationLoop();
-    updateAnimalsLoop();
-    
+    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateFirepitsLoop(); updateParticles(); updateDayNightCycle();
     renderer.render(scene, camera);
 }
 
-window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-animate();
+window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+generateDefaultWorld(); animate();
