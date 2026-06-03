@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. TEXTURE & AUDIO GENERATOR
+// 0. PROCEDURAL TEXTURES & EXPANDED AUDIO ENGINE
 // =========================================================================
 let audioCtx = null;
 
@@ -18,18 +18,34 @@ function playSound(type) {
 
     if (type === 'break') {
         osc.type = 'triangle';
-        osc.frequency.setValueAtTime(120, now);
-        osc.frequency.exponentialRampToValueAtTime(40, now + 0.15);
+        osc.frequency.setValueAtTime(130, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.15);
         gainNode.gain.setValueAtTime(0.4, now);
         gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
         osc.start(now); osc.stop(now + 0.15);
     } else if (type === 'place') {
         osc.type = 'sine';
-        osc.frequency.setValueAtTime(200, now);
-        osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(260, now + 0.08);
         gainNode.gain.setValueAtTime(0.3, now);
         gainNode.gain.linearRampToValueAtTime(0.01, now + 0.08);
         osc.start(now); osc.stop(now + 0.08);
+    } else if (type === 'jump1') {
+        // First jump sound effect (low to mid sweep)
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(300, now + 0.12);
+        gainNode.gain.setValueAtTime(0.2, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.12);
+        osc.start(now); osc.stop(now + 0.12);
+    } else if (type === 'jump2') {
+        // High-pitch sci-fi double jump sound effect
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(350, now);
+        osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+        gainNode.gain.setValueAtTime(0.25, now);
+        gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
+        osc.start(now); osc.stop(now + 0.15);
     } else if (type === 'ui') {
         osc.type = 'square';
         osc.frequency.setValueAtTime(500, now);
@@ -62,11 +78,11 @@ function createVoxelTexture(baseColor, noiseColor, style) {
 }
 
 // =========================================================================
-// 1. ENGINE SETUP
+// 1. ENGINE & GRAPHICS SETUP
 // =========================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.FogExp2(0x87CEEB, 0x02);
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.02); 
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -82,7 +98,7 @@ directionalLight.castShadow = true;
 scene.add(directionalLight);
 
 // =========================================================================
-// 2. MATERIALS
+// 2. BLOCK ENGINE MATERIALS
 // =========================================================================
 const materials = {
     grass: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#557a2b', '#3f5e1f', 'noise') }),
@@ -115,7 +131,62 @@ function clearCurrentWorld() {
 }
 
 // =========================================================================
-// 3. LOGO & TREES
+// 3. 3D ITEM HOLDER: HELD HAND AXE IMPLEMENTATION
+// =========================================================================
+const axeGroup = new THREE.Group();
+
+// 1. Build an iron/stone pixel blade structure
+const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2 });
+const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.25), bladeMat);
+bladeMesh.position.set(0, 0.4, -0.1);
+axeGroup.add(bladeMesh);
+
+// 2. Build the wooden shaft handle structure
+const handleMat = new THREE.MeshStandardMaterial({ color: 0x92400e });
+const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.8, 0.04), handleMat);
+handleMesh.position.set(0, 0.1, 0);
+axeGroup.add(handleMesh);
+
+// Scale, rotate, and pin the composite weapon securely onto the active viewport camera view
+axeGroup.scale.set(1, 1, 1);
+axeGroup.position.set(0.3, -0.35, -0.5); 
+axeGroup.rotation.set(0, Math.PI / 4, 0);
+camera.add(axeGroup);
+scene.add(camera); // Appends tracking container directly to master layout
+
+let axeSwingTimer = 0;
+let isAxeSwinging = false;
+
+function triggerAxeSwingAnimation() {
+    if (isAxeSwinging) return;
+    isAxeSwinging = true;
+    axeSwingTimer = 0;
+}
+
+// Updates rotation values sequentially every ticks frame inside engine run
+function updateAxeAnimationLoop() {
+    if (!isAxeSwinging) {
+        // Standard baseline walking idle position values
+        axeGroup.position.lerp(new THREE.Vector3(0.3, -0.35, -0.5), 0.1);
+        axeGroup.rotation.set(0, Math.PI / 4, 0);
+        return;
+    }
+    
+    axeSwingTimer += 0.15;
+    if (axeSwingTimer >= Math.PI) {
+        isAxeSwinging = false;
+        return;
+    }
+    
+    // Quick sine-wave forward chopping calculations
+    const swingFactor = Math.sin(axeSwingTimer);
+    axeGroup.position.z = -0.5 - (swingFactor * 0.15);
+    axeGroup.position.y = -0.35 + (swingFactor * 0.08);
+    axeGroup.rotation.x = -swingFactor * 1.1; 
+}
+
+// =========================================================================
+// 4. GENERATION ARCHITECTURE
 // =========================================================================
 function spawnTree(trunkX, trunkZ) {
     const baseY = 3; 
@@ -164,24 +235,21 @@ function generateDefaultWorld() {
     buildNickSign();
     spawnTree(8, 20);
     spawnTree(24, 22);
-    camera.position.set(WORLD_SIZE / 2, 5, WORLD_SIZE - 2);
+    camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 2);
 }
 
 generateDefaultWorld();
 
 // =========================================================================
-// 4. NATURAL UN-INVERTED TOUCH & CLICK LOOK ENGINE
+// 5. UNIFIED CROSS-DEVICE LOOK CONTROL PIPELINE
 // =========================================================================
 let isMovingForward = false;
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0;
 let isDraggingCamera = false;
 
-// Unified tracking function handles finger drops and desktop mouse clicks
 function getEventCoords(e) {
-    if (e.touches && e.touches.length > 0) {
-        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
+    if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
     return { x: e.clientX, y: e.clientY };
 }
 
@@ -190,8 +258,7 @@ function startTracking(e) {
     initAudio();
     isDraggingCamera = true;
     const coords = getEventCoords(e);
-    lastTrackX = coords.x;
-    lastTrackY = coords.y;
+    lastTrackX = coords.x; lastTrackY = coords.y;
 }
 
 function moveTracking(e) {
@@ -200,13 +267,12 @@ function moveTracking(e) {
     const deltaX = coords.x - lastTrackX;
     const deltaY = coords.y - lastTrackY;
     
-    lastTrackX = coords.x;
-    lastTrackY = coords.y;
+    lastTrackX = coords.x; lastTrackY = coords.y;
 
     const lookSpeed = 0.005;
     euler.setFromQuaternion(camera.quaternion);
     
-    // NATURAL TRACKING PATHWAY: Drag left -> Look Left. Drag Up -> Look Up.
+    // Normal Looking Orientation mapping trackway
     euler.y -= deltaX * lookSpeed; 
     euler.x -= deltaY * lookSpeed; 
     
@@ -214,21 +280,16 @@ function moveTracking(e) {
     camera.quaternion.setFromEuler(euler);
 }
 
-function stopTracking() {
-    isDraggingCamera = false;
-}
+function stopTracking() { isDraggingCamera = false; }
 
-// Add Mobile Touch Listeners
 document.addEventListener('touchstart', startTracking, { passive: true });
 document.addEventListener('touchmove', moveTracking, { passive: true });
 document.addEventListener('touchend', stopTracking);
-
-// Add Desktop Mouse Click-Drag Listeners
 document.addEventListener('mousedown', startTracking);
 document.addEventListener('mousemove', moveTracking);
 document.addEventListener('mouseup', stopTracking);
 
-// Unified Button Events (Works for Touch and Mouse Click on Desktop)
+// Button Binding (MOVE PAD)
 const movePad = document.getElementById('move-pad');
 function startMoving(e) { e.preventDefault(); initAudio(); isMovingForward = true; }
 function stopMoving() { isMovingForward = false; }
@@ -245,7 +306,51 @@ window.setBlockType = function(type) {
 };
 
 // =========================================================================
-// 5. UNIFIED ACTION PADS
+// 6. REAL TIME PHYSICS ENGINE (GRAVITY, JUMP, DOUBLE-JUMP)
+// =========================================================================
+let playerVelocityY = 0;
+let remainingJumpsCount = 2; // Allows initial + air double-jump allocation
+const GRAVITY_CONSTANT = 0.009;
+const FORCE_JUMP = 0.16;
+const FLOOR_LEVEL_HEIGHT = 4.5; // Walking viewpoint scale baseline
+
+function triggerJumpAction(e) {
+    if (e) e.preventDefault();
+    initAudio();
+    
+    if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
+        // Grounded Jump Execution
+        playerVelocityY = FORCE_JUMP;
+        remainingJumpsCount = 1; 
+        playSound('jump1');
+    } else if (remainingJumpsCount === 1) {
+        // Air Double-Jump Execution
+        playerVelocityY = FORCE_JUMP * 0.95; // Slightly damp second vault force scaling
+        remainingJumpsCount = 0; 
+        playSound('jump2');
+    }
+}
+
+// Connect layout triggers safely over layout buttons container
+const jumpPad = document.getElementById('jump-pad');
+jumpPad.addEventListener('touchstart', triggerJumpAction);
+jumpPad.addEventListener('mousedown', triggerJumpAction);
+
+function processPhysicsPipeline() {
+    // Apply constant downwards velocity deceleration scaling
+    playerVelocityY -= GRAVITY_CONSTANT;
+    camera.position.y += playerVelocityY;
+    
+    // Check collisions with standard floor map limit plane
+    if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
+        camera.position.y = FLOOR_LEVEL_HEIGHT;
+        playerVelocityY = 0;
+        remainingJumpsCount = 2; // Refresh counters safely
+    }
+}
+
+// =========================================================================
+// 7. INTERACTION CONTROLLER: BLOCKS DESTRUCTION/CONSTRUCTION
 // =========================================================================
 const raycaster = new THREE.Raycaster();
 const screenCenter = new THREE.Vector2(0, 0);
@@ -253,6 +358,8 @@ const screenCenter = new THREE.Vector2(0, 0);
 function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     const intersects = raycaster.intersectObjects(activeBlocks);
+
+    if (!isPlacement) triggerAxeSwingAnimation(); // Trigger axe swing every single time you hit BREAK!
 
     if (intersects.length > 0 && intersects[0].distance < 10) { 
         const hitBlock = intersects[0].object;
@@ -273,20 +380,18 @@ function handleBlockAction(isPlacement) {
     }
 }
 
-// Connect layout element listeners across click/touch definitions
 const btnBreak = document.getElementById('mb-break');
 const btnPlace = document.getElementById('mb-place');
 
 btnBreak.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
 btnBreak.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
-
 btnPlace.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
 btnPlace.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
 
 window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 6. STORAGE MANAGERS
+// 8. STORAGE PACKS
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui');
@@ -307,18 +412,23 @@ window.loadWorld = function() {
 };
 
 // =========================================================================
-// 7. RENDERING PIPELINE LOOP
+// 9. ANIMATION & MAIN RENDERING TICK LOOP
 // =========================================================================
 const SPEED = 0.12; 
 
 function animate() {
     requestAnimationFrame(animate);
+    
+    // Movement translation processing engine lines
     if (isMovingForward) {
         const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
         forward.y = 0; forward.normalize();
         camera.position.addScaledVector(forward, SPEED);
     }
-    camera.position.y = 4.5;
+    
+    processPhysicsPipeline();
+    updateAxeAnimationLoop();
+    
     renderer.render(scene, camera);
 }
 
