@@ -2,40 +2,49 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nickcraft - 3D Web Sandbox</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nickcraft - Mobile & Desktop Voxel Sandbox</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #87CEEB; }
-        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; }
-        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: white; transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: difference; }
-        #menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; display: flex; gap: 10px; }
-        button { padding: 8px 16px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; pointer-events: auto; }
-        button:hover { background: #45a049; }
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #87CEEB; user-select: none; -webkit-user-select: none; touch-action: none; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; z-index: 10; font-size: 12px; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 8px; height: 8px; background: white; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; mix-blend-mode: difference; }
+        
+        /* Bottom Menu */
+        #menu { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 8px; border-radius: 5px; display: flex; gap: 5px; z-index: 10; max-width: 90vw; overflow-x: auto; }
+        button { padding: 8px 12px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; font-size: 12px; }
         .save-btn { background: #008CBA; }
-        .save-btn:hover { background: #007B9A; }
+
+        /* Mobile Touch Joysticks/Pads */
+        .touch-zone { position: absolute; bottom: 80px; width: 100px; height: 100px; background: rgba(255,255,255,0.2); border: 2px dashed rgba(255,255,255,0.4); border-radius: 50%; z-index: 15; display: none; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 12px; }
+        #move-pad { left: 20px; display: flex; } /* Left side for walking */
+        #action-pad { right: 20px; border-radius: 10px; width: 80px; height: 120px; display: flex; flex-direction: column; gap: 10px; background: transparent; border: none; }
+        .mobile-btn { width: 70px; height: 50px; background: rgba(0,0,0,0.5); border: 2px solid white; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
     </style>
-    <!-- We load Three.js from a secure web link (CDN) so you don't have to download it manually -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
     <div id="ui">
-        <h1>Nickcraft v1.0</h1>
-        <p>Controls: WASD to Move | Space to Jump | Left-Click to Break | Right-Click to Place</p>
-        <p>Click screen to lock mouse cursor. Press Esc to escape.</p>
+        <h1 style="margin:0; font-size: 18px;">Nickcraft v1.5 (Mobile Ready)</h1>
+        <p id="device-tips" style="margin:5px 0;">Desktop: WASD + Click | iPhone: Left side to move, swipe screen to look.</p>
     </div>
     
     <div id="crosshair"></div>
+
+    <div id="move-pad" class="touch-zone"><span>MOVE</span></div>
+    <div id="action-pad" class="touch-zone">
+        <div class="mobile-btn" id="mb-place">PLACE</div>
+        <div class="mobile-btn" id="mb-break">BREAK</div>
+    </div>
 
     <div id="menu">
         <button onclick="setBlockType('grass')">Grass</button>
         <button onclick="setBlockType('dirt')">Dirt</button>
         <button onclick="setBlockType('stone')">Stone</button>
-        <button class="save-btn" onclick="saveWorld()">Save World</button>
-        <button class="save-btn" onclick="loadWorld()">Load World</button>
+        <button class="save-btn" onclick="saveWorld()">Save</button>
+        <button class="save-btn" onclick="loadWorld()">Load</button>
     </div>
 
-    <!-- This links to your game logic file -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js"></script>
 </body>
 </html>
