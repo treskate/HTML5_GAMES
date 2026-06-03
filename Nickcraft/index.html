@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Nickcraft - Living Sandbox World</title>
+    <title>Nickcraft - Fire & Glow Edition</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: sans-serif; background: #87CEEB; user-select: none; -webkit-user-select: none; touch-action: none; }
         #ui { position: absolute; top: 12px; left: 12px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; z-index: 10; }
@@ -12,7 +12,7 @@
         
         #crosshair { position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; background: white; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; mix-blend-mode: difference; }
         
-        /* Stylized Block Selector Hotbar Visuals */
+        /* Graphic Inventory Hotbar Visuals */
         #menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(30,30,30,0.85); padding: 6px; border: 4px solid #4a4a4a; border-radius: 4px; display: flex; gap: 6px; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
         .hotbar-slot { width: 54px; height: 54px; color: white; border: 3px solid #2c2c2c; border-radius: 4px; font-weight: bold; font-size: 11px; text-shadow: 1px 1px 2px black; cursor: pointer; display: flex; align-items: center; justify-content: center; text-transform: uppercase; transition: all 0.1s ease; }
         
@@ -21,34 +21,33 @@
         .slot-stone { background: #737373; }
         .slot-wood { background: #f97316; } 
         .slot-action { background: #0284c7; width: auto; padding: 0 12px; font-size: 12px; }
-
         .hotbar-slot.active-slot { border-color: #ffffff; transform: scale(1.05); box-shadow: 0 0 12px rgba(255,255,255,0.6); }
         
         /* Unified Touch Zone Bases */
         .touch-zone { position: absolute; z-index: 15; display: flex; align-items: center; justify-content: center; }
         
-        /* Massive Chunky Fat 3D-Tile Styled D-Pad Layout */
-        #dpad-container { bottom: 35px; left: 35px; width: 260px; height: 260px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 2px; background: transparent; }
-        .dpad-btn { background: rgba(105, 115, 100, 0.75); border: 5px solid #2a2e26; border-bottom-width: 8px; border-radius: 16px; box-shadow: inset 0px 4px 0px rgba(255,255,255,0.25), 0px 6px 10px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
-        .dpad-btn:active { background: rgba(75, 82, 70, 0.9); border-bottom-width: 5px; transform: translateY(3px); box-shadow: inset 0px 2px 0px rgba(0,0,0,0.2); }
+        /* Open-Cross Centerless Layout matched to cant-find-the-old-dpad-i-can-only-use-the-new-one-v0-p5b2mjfl1soc1.webp */
+        #dpad-container { bottom: 35px; left: 35px; width: 250px; height: 250px; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 8px; background: transparent; }
+        .dpad-btn { background: rgba(118, 125, 112, 0.65); border: 4px solid rgba(48, 52, 45, 0.8); border-radius: 12px; box-shadow: inset 0px 3px 0px rgba(255,255,255,0.2), 0px 5px 8px rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; transition: transform 0.05s ease; }
         
-        .dpad-arrow { width: 0; height: 0; border-style: solid; opacity: 0.85; }
-        #dpad-up .dpad-arrow { border-width: 0 20px 24px 20px; border-color: transparent transparent #151813 transparent; }
-        #dpad-left .dpad-arrow { border-width: 20px 24px 20px 0; border-color: transparent #151813 transparent transparent; }
-        #dpad-right .dpad-arrow { border-width: 20px 0 20px 24px; border-color: transparent transparent transparent #151813; }
-        #dpad-down .dpad-arrow { border-width: 24px 20px 0 20px; border-color: #151813 transparent transparent transparent; }
+        /* Active touch tracking states */
+        .dpad-btn:active { background: rgba(78, 84, 74, 0.85); border-color: rgba(30, 33, 28, 0.9); transform: scale(0.95); box-shadow: inset 0px 2px 4px rgba(0,0,0,0.4); }
         
-        #dpad-center { grid-column: 2; grid-row: 2; background: rgba(105, 115, 100, 0.5); border: 5px solid #2a2e26; border-radius: 16px; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
-        .center-dot { width: 20px; height: 10px; background: #151813; opacity: 0.5; border-radius: 3px; }
-        .center-line { width: 26px; height: 5px; background: #151813; opacity: 0.5; border-radius: 2px; }
-
+        /* Sharp Pixel Triangle Icons inside buttons */
+        .dpad-arrow { width: 0; height: 0; border-style: solid; opacity: 0.9; }
+        #dpad-up .dpad-arrow { border-width: 0 18px 22px 18px; border-color: transparent transparent #21261e transparent; }
+        #dpad-left .dpad-arrow { border-width: 18px 22px 18px 0; border-color: transparent #21261e transparent transparent; }
+        #dpad-right .dpad-arrow { border-width: 18px 0 18px 22px; border-color: transparent transparent transparent #21261e; }
+        #dpad-down .dpad-arrow { border-width: 22px 18px 0 18px; border-color: #21261e transparent transparent transparent; }
+        
+        /* Explicit Grid Positions (Center Column 2, Row 2 is kept intentionally empty) */
         #dpad-up { grid-column: 2; grid-row: 1; }
         #dpad-left { grid-column: 1; grid-row: 2; }
         #dpad-right { grid-column: 3; grid-row: 2; }
         #dpad-down { grid-column: 2; grid-row: 3; }
         
-        /* Large Rounded Action Pads */
-        #jump-pad { bottom: 120px; left: 320px; width: 100px; height: 100px; background: rgba(255,255,255,0.15); border: 4px dashed rgba(255,255,255,0.5); border-radius: 50%; color: white; font-weight: bold; font-size: 18px; text-shadow: 1px 1px 2px black; cursor: pointer; }
+        /* Rounded Action Controls Layout */
+        #jump-pad { bottom: 110px; left: 310px; width: 95px; height: 95px; background: rgba(255,255,255,0.15); border: 4px dashed rgba(255,255,255,0.4); border-radius: 50%; color: white; font-weight: bold; font-size: 16px; text-shadow: 1px 1px 2px black; cursor: pointer; }
         #jump-pad:active { background: rgba(255,255,255,0.3); }
         
         #action-pad { bottom: 80px; right: 20px; width: 120px; height: 210px; flex-direction: column; gap: 15px; }
@@ -61,15 +60,17 @@
 
     <div id="ui">
         <h1>Nickcraft Worlds</h1>
-        <p>Drag Canvas to Look | Chunky D-Pad Active</p>
+        <p>Drag Canvas to Look | Clean Cross D-Pad Active</p>
     </div>
     
     <div id="crosshair"></div>
 
+    <!-- Centerless Cross layout matching cant-find-the-old-dpad-i-can-only-use-the-new-one-v0-p5b2mjfl1soc1.webp -->
     <div id="dpad-container" class="touch-zone">
         <div class="dpad-btn" id="dpad-up"><div class="dpad-arrow"></div></div>
         <div class="dpad-btn" id="dpad-left"><div class="dpad-arrow"></div></div>
-        <div id="dpad-center"><div class="center-dot"></div><div class="center-line"></div></div>
+        <!-- Center coordinate is intentionally blank -->
+        <div></div>
         <div class="dpad-btn" id="dpad-right"><div class="dpad-arrow"></div></div>
         <div class="dpad-btn" id="dpad-down"><div class="dpad-arrow"></div></div>
     </div>
@@ -81,6 +82,7 @@
         <div class="mobile-btn" id="mb-break">BREAK</div>
     </div>
 
+    <!-- Inventory Block Selection Trays -->
     <div id="menu">
         <div id="slot-grass" class="hotbar-slot slot-grass active-slot" onclick="selectSlot('grass')">Grass</div>
         <div id="slot-dirt" class="hotbar-slot slot-dirt" onclick="selectSlot('dirt')">Dirt</div>
