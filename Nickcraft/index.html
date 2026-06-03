@@ -12,23 +12,28 @@
         
         #crosshair { position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; background: white; transform: translate(-50%, -50%); pointer-events: none; z-index: 10; mix-blend-mode: difference; }
         
-        /* Large, Thumb-Friendly Hotbar */
+        /* Colored Thumb-Friendly Hotbar */
         #menu { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; display: flex; gap: 8px; z-index: 20; max-width: 95vw; }
-        button { padding: 12px 16px; background: #4CAF50; color: white; border: none; font-line: none; border-radius: 5px; font-weight: bold; font-size: 14px; }
-        .wood-btn { background: #b45309; }
-        .save-btn { background: #008CBA; }
+        button { padding: 12px 16px; color: white; border: 2px solid rgba(255,255,255,0.3); border-radius: 5px; font-weight: bold; font-size: 14px; text-shadow: 1px 1px 1px black; }
+        
+        /* Dynamic Button Colors */
+        .btn-grass { background-color: #557a2b; }
+        .btn-dirt { background-color: #866043; }
+        .btn-stone { background-color: #737373; }
+        .btn-wood { background-color: #f97316; color: white; } /* Light Orange color */
+        .save-btn { background-color: #008CBA; }
 
         /* Huge Mobile Touch Buttons */
         .touch-zone { position: absolute; z-index: 15; display: flex; align-items: center; justify-content: center; }
         
-        /* Left giant movement pad */
-        #move-pad { bottom: 100px; left: 25px; width: 130px; height: 130px; background: rgba(255,255,255,0.25); border: 3px dashed rgba(255,255,255,0.5); border-radius: 50%; color: white; font-weight: bold; font-size: 16px; }
+        /* DOUBLED SIZE Left Movement Pad (200px x 200px) */
+        #move-pad { bottom: 80px; left: 20px; width: 200px; height: 200px; background: rgba(255,255,255,0.2); border: 4px dashed rgba(255,255,255,0.6); border-radius: 50%; color: white; font-weight: bold; font-size: 22px; text-shadow: 1px 1px 2px black; }
         
         /* Right giant action pads */
-        #action-pad { bottom: 100px; right: 25px; width: 110px; height: 180px; flex-direction: column; gap: 15px; }
-        .mobile-btn { width: 100%; height: 80px; background: rgba(0,0,0,0.6); border: 3px solid white; color: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
-        #mb-place { background: rgba(76, 175, 80, 0.6); }
-        #mb-break { background: rgba(244, 67, 54, 0.6); }
+        #action-pad { bottom: 80px; right: 20px; width: 110px; height: 200px; flex-direction: column; gap: 15px; }
+        .mobile-btn { width: 100%; height: 90px; background: rgba(0,0,0,0.6); border: 3px solid white; color: white; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; }
+        #mb-place { background: rgba(76, 175, 80, 0.7); }
+        #mb-break { background: rgba(244, 67, 54, 0.7); }
     </style>
 </head>
 <body>
@@ -47,10 +52,10 @@
     </div>
 
     <div id="menu">
-        <button onclick="setBlockType('grass')">Grass</button>
-        <button onclick="setBlockType('dirt')">Dirt</button>
-        <button onclick="setBlockType('stone')">Stone</button>
-        <button class="wood-btn" onclick="setBlockType('wood')">Wood</button>
+        <button class="btn-grass" onclick="setBlockType('grass')">Grass</button>
+        <button class="btn-dirt" onclick="setBlockType('dirt')">Dirt</button>
+        <button class="btn-stone" onclick="setBlockType('stone')">Stone</button>
+        <button class="btn-wood" onclick="setBlockType('wood')">Wood</button>
         <button class="save-btn" onclick="saveWorld()">Save</button>
         <button class="save-btn" onclick="loadWorld()">Load</button>
     </div>
