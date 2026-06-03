@@ -128,6 +128,16 @@ const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 let activeBlocks = []; let activeAnimals = []; let activeZombies = []; let firepitsArray = []; let particleSystems = [];
 let currentSelectedType = 'grass';
 
+// Ghost Block Preview Blueprint Config
+let ghostBlockMesh = null;
+function createGhostBlockSystem() {
+    const geo = new THREE.BoxGeometry(1.02, 1.02, 1.02); // Slightly larger to prevent flickering overlap
+    const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.4, wireframe: true });
+    ghostBlockMesh = new THREE.Mesh(geo, mat);
+    ghostBlockMesh.visible = false;
+    scene.add(ghostBlockMesh);
+}
+
 function createBlock(x, y, z, type) {
     const material = materials[type] || materials.grass;
     const mesh = new THREE.Mesh(blockGeometry, material);
@@ -337,9 +347,44 @@ function updateZombiesLoop() {
 }
 
 // =========================================================================
-// 7. SKY LOGO REMOVED IN FAVOR OF SCREEN UI HEADER
+// 7. LIGHTWEIGHT GHOST BLOCK PREVIEW ENGINE
 // =========================================================================
-function generateSkyLogoText() { /* Deprecated and cleaned up for performance layout */ }
+const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
+
+function updateGhostBlockPreviewLoop() {
+    if (!ghostBlockMesh) return;
+    
+    raycaster.setFromCamera(screenCenter, camera);
+    const intersects = raycaster.intersectObjects(activeBlocks);
+    
+    if (intersects.length > 0 && intersects[0].distance < 10) {
+        const targetBlock = intersects[0].object;
+        if (targetBlock.userData.blockType === 'water') {
+            ghostBlockMesh.visible = false;
+            return;
+        }
+        
+        const faceNormal = intersects[0].face.normal;
+        
+        // Match chosen texture block color to ghost layout seamlessly
+        if (materials[currentSelectedType]) {
+            ghostBlockMesh.material.color.copy(materials[currentSelectedType].color || new THREE.Color(0xffffff));
+        }
+        
+        // Calculate blueprint grid placement offset positions
+        ghostBlockMesh.position.set(
+            Math.round(targetBlock.position.x + faceNormal.x),
+            Math.round(targetBlock.position.y + faceNormal.y),
+            Math.round(targetBlock.position.z + faceNormal.z)
+        );
+        
+        // Pulsing visualization effect
+        ghostBlockMesh.material.opacity = 0.35 + Math.sin(Date.now() * 0.007) * 0.15;
+        ghostBlockMesh.visible = true;
+    } else {
+        ghostBlockMesh.visible = false;
+    }
+}
 
 // =========================================================================
 // 8. HUNTABLE PEACEFUL ANIMALS ENGINE WITH GHOST ASCENSION
@@ -358,7 +403,6 @@ function spawnAnimals() {
             const ry = getGroundYAt(rx, rz) + (cfg.size[1]/2) + 0.5;
             const group = new THREE.Group();
             
-            // Allow material alpha updates for ghost animations later
             const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.85, transparent: true, opacity: 1.0 });
             const body = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), bodyMat); body.castShadow = true; group.add(body);
             
@@ -404,8 +448,8 @@ function spawnTree(trunkX, trunkZ, customHeight = 4) {
 
 function generateDefaultWorld() {
     clearCurrentWorld(); scene.fog = new THREE.FogExp2(0x87CEEB, 0.012);
+    createGhostBlockSystem();
     
-    // Configured Pool Center
     const poolX = 45, poolZ = 45, poolRadius = 7;
 
     for (let x = 0; x < WORLD_SIZE; x++) {
@@ -427,22 +471,19 @@ function generateDefaultWorld() {
         }
     }
     
-    // Boundary fence borders
     for (let i = 0; i < WORLD_SIZE; i++) {
         createBlock(i, getGroundYAt(i, 0) + 1, 0, 'fence'); createBlock(i, getGroundYAt(i, WORLD_SIZE - 1) + 1, WORLD_SIZE - 1, 'fence');
         createBlock(0, getGroundYAt(0, i) + 1, i, 'fence'); createBlock(WORLD_SIZE - 1, getGroundYAt(WORLD_SIZE - 1, i) + 1, i, 'fence');
     }
 
-    // Trees spawned exclusively close to the edges of the map
     spawnTree(6, 8, 4);     spawnTree(8, 62, 4); 
     spawnTree(62, 8, 5);    spawnTree(64, 60, 4);
     spawnTree(5, 35, 4);    spawnTree(63, 35, 5);
 
-    // 7 Strategic Firepit Placement Configurations
     buildFirepit(15, 15);   buildFirepit(55, 15);
     buildFirepit(15, 55);   buildFirepit(55, 55);
     buildFirepit(45, 25);   buildFirepit(25, 45);
-    buildFirepit(35, 35);   // New 7th firepit center zone
+    buildFirepit(35, 35);   
 
     spawnAnimals(); camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 8);
 }
@@ -533,19 +574,13 @@ function processPhysicsPipeline() {
 // =========================================================================
 // 13. CORE COMBAT & DESTRUCTION RAYCAST INTERFACES
 // =========================================================================
-const raycaster = new THREE.Raycaster(); const screenCenter = new THREE.Vector2(0, 0);
-
 function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     if (!isPlacement) triggerAxeSwingAnimation();
 
     if (!isPlacement) {
-        // Attack Living Entities Loop Setup
         const targetMeshes = [];
-        
-        // Collate Zombie bounding box parts
         activeZombies.forEach(z => { if(z.mesh.children[0]) targetMeshes.push(z.mesh.children[0]); });
-        // Collate Animal body segments
         activeAnimals.forEach(a => { if(!a.isGhost && a.mesh.children[0]) targetMeshes.push(a.mesh.children[0]); });
 
         const intersectsEntities = raycaster.intersectObjects(targetMeshes);
@@ -553,7 +588,6 @@ function handleBlockAction(isPlacement) {
             const hitSegment = intersectsEntities[0].object;
             const rootGroup = hitSegment.parent;
 
-            // 1st Check: Is target a Zombie?
             const zombieTarget = activeZombies.find(z => z.mesh === rootGroup);
             if (zombieTarget) {
                 playSound('break');
@@ -566,18 +600,15 @@ function handleBlockAction(isPlacement) {
                 return;
             }
 
-            // 2nd Check: Is target a peaceful Animal?
             const animalTarget = activeAnimals.find(a => a.mesh === rootGroup && !a.isGhost);
             if (animalTarget) {
                 playSound('hurt');
                 animalTarget.hitpoints -= 1;
-                // Emit combat red critical particles
                 spawnBlockBreakParticles(animalTarget.mesh.position.x, animalTarget.mesh.position.y, animalTarget.mesh.position.z, 0xef4444);
                 
                 if (animalTarget.hitpoints <= 0) {
                     playSound('death');
                     animalTarget.isGhost = true;
-                    // Morph color to transparent sky blue look
                     rootGroup.children.forEach(child => {
                         if (child.material) {
                             child.material = child.material.clone();
@@ -643,7 +674,9 @@ function animate() {
     camera.position.x = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.x));
     camera.position.z = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.z));
 
-    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); updateParticles(); updateDayNightCycle();
+    processPhysicsPipeline(); updateAxeAnimationLoop(); updateAnimalsLoop(); updateZombiesLoop(); updateFirepitsLoop(); 
+    updateGhostBlockPreviewLoop(); updateParticles(); updateDayNightCycle();
+    
     renderer.render(scene, camera);
 }
 
