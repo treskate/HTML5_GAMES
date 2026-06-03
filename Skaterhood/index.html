@@ -39,7 +39,7 @@
             font-weight: 900;
             font-family: 'Impact', 'Arial Black', sans-serif;
             letter-spacing: 2px;
-            text-shadow: 3px 3px #000; /* Added matching black shadow */
+            text-shadow: 3px 3px #000;
         }
         #score-value {
             color: #ff0;
@@ -167,7 +167,7 @@
 
         let totalScore = 0, currentComboPoints = 0, currentComboMultiplier = 0;
         let activeTricks = [], timerSeconds = 60, isGameOver = false;
-        let landingShake = 0;
+        let landingShake = 0, bailRecoveryTimer = 0;
         const particles = [];
 
         const scene = new THREE.Scene();
@@ -217,7 +217,9 @@
         }
 
         function startGrindSound() {
-            if (!audioCtx || grindNoiseNode) return;
+            if (grindNoiseNode) return; 
+            if (!audioCtx) return;
+            
             const bufferSize = audioCtx.sampleRate * 1;
             const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
             const data = buffer.getChannelData(0);
@@ -242,8 +244,13 @@
 
         function stopGrindSound() {
             if (grindNoiseNode) {
-                grindNoiseNode.stop(); grindNoiseNode.disconnect();
-                grindGainNode.disconnect(); grindNoiseNode = null; grindGainNode = null;
+                try {
+                    grindNoiseNode.stop();
+                    grindNoiseNode.disconnect();
+                    grindGainNode.disconnect();
+                } catch(e) {}
+                grindNoiseNode = null; 
+                grindGainNode = null;
             }
         }
 
@@ -333,7 +340,7 @@
         // Outside Grass Floor Surroundings
         const grassFloor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), grassMaterial);
         grassFloor.rotation.x = -Math.PI / 2;
-        grassFloor.position.y = -0.05; // Placed slightly below the concrete pad to prevent clipping
+        grassFloor.position.y = -0.05; 
         grassFloor.receiveShadow = true;
         scene.add(grassFloor);
 
@@ -545,8 +552,8 @@
         }
 
         // --- PARK LAYOUT ---
-        addRamp(24, 4.2, 26, 0, -75, 0);       // Main North Ramp
-        addRamp(24, 4.2, 26, 0, 75, Math.PI);  // Main South Ramp
+        addRamp(24, 4.2, 26, 0, -75, 0);       
+        addRamp(24, 4.2, 26, 0, 75, Math.PI);  
 
         addHorizontalRail(-80, -45, -80, 35, 1.3);
         addHorizontalRail(80, -45, 80, 35, 1.3);
@@ -637,7 +644,7 @@
 
                 npcSkater.position.set((Math.random() - 0.5) * 150, 0, (Math.random() - 0.5) * 150);
                 scene.add(npcSkater);
-                npcs.push({ mesh: npcSkater, speed: 0.12 + Math.random() * 0.12, angle: Math.random() * Math.PI * 2 });
+                npcs.push({ mesh: npcSkater, speed: 0.12 + Math.random() * 0.12, angle: Math.random() * Math.PI * 2, radius: 1.2 * scaleFactor });
             }
         }
         spawnSkaterNPCs();
@@ -649,14 +656,18 @@
             const greens = [0x134f13, 0x195c19, 0x0f3d0f, 0x226b22, 0x1b4d22];
             const leafGeo = new THREE.ConeGeometry(5.5, 14, 10);
 
-            // Left wall coordinate at -119, sign center sits around z = -20
             for (let i = 0; i < 40; i++) {
                 let side = i % 4;
                 let posOffset = (Math.random() - 0.5) * 225;
                 
-                // CRITICAL FIX: If the tree falls on the west side (side == 3) and lands right near the "Roblox Sucks" billboard space, skip spawning it
+                // Roblox Sign Check: West side (side == 3), offset around z = -20
                 if (side === 3 && posOffset > -32 && posOffset < -8) {
                     continue; 
+                }
+
+                // FIX: "Lee Rules" Sign Check: South side (side == 1), offset around x = -50
+                if (side === 1 && posOffset > -62 && posOffset < -38) {
+                    continue;
                 }
 
                 const tree = new THREE.Group();
@@ -712,7 +723,7 @@
         const keys = { w:false, a:false, s:false, d:false, space:false, shift:false, b:false, tre:false };
 
         window.addEventListener('keydown', e => {
-            if(isGameOver) return;
+            if(isGameOver || bailRecoveryTimer > 0) return;
             initAudio();
             if(e.key==='w' || e.key==='ArrowUp') keys.w = true;
             if(e.key==='a' || e.key==='ArrowLeft') keys.a = true;
@@ -735,7 +746,7 @@
         });
 
         window.addEventListener('touchstart', e => {
-            if(isGameOver) return;
+            if(isGameOver || bailRecoveryTimer > 0) return;
             initAudio();
             if (e.target.classList.contains('mobile-btn')) return;
             const touchX = e.touches[0].clientX;
@@ -744,7 +755,7 @@
         }, {passive: true});
 
         window.addEventListener('touchmove', e => {
-            if(isGameOver || touchSteerDirection === 0) return;
+            if(isGameOver || touchSteerDirection === 0 || bailRecoveryTimer > 0) return;
             const touchX = e.touches[0].clientX;
             if (touchX < window.innerWidth / 2) touchSteerDirection = -1;
             else touchSteerDirection = 1;
@@ -754,11 +765,11 @@
             if (e.touches.length === 0) touchSteerDirection = 0;
         }, {passive: true});
 
-        document.getElementById('btn-ollie').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); if(isGrounded) ollieHold = true; } }, {passive: true});
-        document.getElementById('btn-ollie').addEventListener('touchend', (e) => { e.stopPropagation(); if(!isGameOver) triggerOllieRelease(); }, {passive: true});
-        document.getElementById('btn-kickflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerKickflipAction(); } }, {passive: true});
-        document.getElementById('btn-backflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerBackflipAction(); } }, {passive: true});
-        document.getElementById('btn-treflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver) { initAudio(); triggerTreflipAction(); } }, {passive: true});
+        document.getElementById('btn-ollie').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver && bailRecoveryTimer <= 0) { initAudio(); if(isGrounded) ollieHold = true; } }, {passive: true});
+        document.getElementById('btn-ollie').addEventListener('touchend', (e) => { e.stopPropagation(); if(!isGameOver && bailRecoveryTimer <= 0) triggerOllieRelease(); }, {passive: true});
+        document.getElementById('btn-kickflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver && bailRecoveryTimer <= 0) { initAudio(); triggerKickflipAction(); } }, {passive: true});
+        document.getElementById('btn-backflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver && bailRecoveryTimer <= 0) { initAudio(); triggerBackflipAction(); } }, {passive: true});
+        document.getElementById('btn-treflip').addEventListener('touchstart', (e) => { e.stopPropagation(); if(!isGameOver && bailRecoveryTimer <= 0) { initAudio(); triggerTreflipAction(); } }, {passive: true});
 
         function triggerOllieRelease() {
             if(isGrounded && ollieHold) {
@@ -824,17 +835,25 @@
                 currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
                 updateHUD();
             }
-            hazards.forEach(hole => hole.passed = false); // Reset clearing validation tracking states upon landing
+            hazards.forEach(hole => hole.passed = false); 
         }
         
-        function bailCombo() {
+        function bailCombo(customText = "WIPEOUT! BAIL") {
             currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
-            document.getElementById('trick-text').innerText = "WIPEOUT! BAIL";
+            document.getElementById('trick-text').innerText = customText;
             setTimeout(() => { if(!isGameOver) document.getElementById('trick-text').innerText=""; }, 1200);
             updateHUD();
             hazards.forEach(hole => hole.passed = false);
+            
+            // Turn off grinding audio if we hit something while grinding
+            if(isGrinding) {
+                isGrinding = false;
+                stopGrindSound();
+            }
         }
         
+        updateHUD();
+
         function updateHUD() {
             document.getElementById('score-value').innerText = Math.floor(totalScore).toString().padStart(5,'0');
             if(currentComboPoints > 0) {
@@ -854,11 +873,12 @@
 
         document.getElementById('btn-restart').addEventListener('click', () => {
             totalScore = 0; currentComboPoints = 0; currentComboMultiplier = 0; activeTricks = [];
-            timerSeconds = 60; isGameOver = false; touchSteerDirection = 0;
+            timerSeconds = 60; isGameOver = false; touchSteerDirection = 0; bailRecoveryTimer = 0;
             skaterRoot.position.set(0, 0, 40); heading = 0;
             skaterRoot.rotation.set(0,0,0); boardGroup.rotation.set(0,0,0); skaterSkeleton.rotation.set(0,0,0);
             flipActive = false; backflipActive = false; treflipActive = false;
             isGrounded = true; isGrinding = false; ollieHold = false;
+            stopGrindSound();
             hazards.forEach(hole => hole.passed = false);
             document.getElementById('game-over-screen').style.display = "none";
             updateHUD();
@@ -874,7 +894,19 @@
             }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            if (!isGameOver) {
+            // Process bail freeze recovery timeline window
+            if(bailRecoveryTimer > 0) {
+                bailRecoveryTimer -= (1/60);
+                speed *= 0.85; // Rapid deceleration brake friction
+                // Apply a tumbling tilt matrix effect visually
+                skaterSkeleton.rotation.z = 0.5;
+                skaterSkeleton.rotation.x = 0.3;
+            } else if (!isGameOver) {
+                // Reset posture after recovery completes
+                if (skaterSkeleton.rotation.z !== 0) {
+                    skaterSkeleton.rotation.set(0, 0, 0);
+                }
+
                 if (keys.a || touchSteerDirection === -1) heading += 0.046;
                 if (keys.d || touchSteerDirection === 1) heading -= 0.046;
             }
@@ -882,10 +914,10 @@
 
             let maxSpd = 0.52;
             let acc = 0.06;
-            let driving = (!isGameOver && (keys.w || isMobile));
+            let driving = (!isGameOver && bailRecoveryTimer <= 0 && (keys.w || isMobile));
 
             if (driving && !ollieHold) speed += (maxSpd - speed) * acc;
-            else if (keys.s && !isGameOver) speed += (-0.22 - speed) * 0.08;
+            else if (keys.s && !isGameOver && bailRecoveryTimer <= 0) speed += (-0.22 - speed) * 0.08;
             else if (isGrounded) speed *= 0.95;
 
             let nextX = skaterRoot.position.x + speed * Math.sin(heading);
@@ -951,18 +983,44 @@
                         yVelocity = -0.25; 
                         bailCombo();
                     } 
-                    // GAP REWARD CRITERIA: If the player flies directly over the hole successfully while airborne
                     else if (!isGrounded && yVelocity !== 0 && !hole.passed && skaterRoot.position.y > 0.1) {
                         hole.passed = true;
-                        registerTrick("GAP JUMP", 250); // Instantly appends +250 points to the ongoing combo stream
+                        registerTrick("GAP JUMP", 250); 
                     }
                 }
             });
 
+            // FEATURE: Active AI Skater Collision Detection Check
+            if (bailRecoveryTimer <= 0 && !isGameOver) {
+                npcs.forEach(npc => {
+                    let dx = nextX - npc.mesh.position.x;
+                    let dz = nextZ - npc.mesh.position.z;
+                    let dist = Math.sqrt(dx * dx + dz * dz);
+                    
+                    // Collision boundary triggers if within vertical range as well
+                    if (dist < (npc.radius + 0.6) && Math.abs(skaterRoot.position.y - npc.mesh.position.y) < 2.0) {
+                        bailRecoveryTimer = 1.5; // Freeze input for 1.5 seconds during a tumble
+                        speed *= -0.5; // Kinetic rebound deflection factor
+                        hitBarrier = true;
+                        
+                        // Break trick streak instantly
+                        bailCombo("WIPEOUT! COLLISION");
+                        landingShake = 0.6;
+                        
+                        // Scatter board rotation orientation out of square alignment
+                        boardGroup.rotation.set(Math.random(), Math.random(), Math.random());
+                        
+                        // Bounce the NPC off in a new random heading angle direction away
+                        npc.angle = Math.atan2(-dx, -dz) + (Math.random() - 0.5);
+                        npc.speed = 0.25; 
+                    }
+                });
+            }
+
             if (!isGrinding && !hitBarrier) {
                 skaterRoot.position.x = nextX;
                 skaterRoot.position.z = nextZ;
-            } else if (hitBarrier) {
+            } else if (hitBarrier && !isGrinding) {
                 speed *= -0.4; 
             }
 
@@ -978,31 +1036,35 @@
                 yVelocity = 0;
                 isGrounded = true;
                 speed = 0;
+                boardGroup.rotation.set(0,0,0);
+                skaterSkeleton.rotation.set(0,0,0);
             }
 
-            // Aerial Transformations
-            if (flipActive) {
-                flipProgress += 0.35; 
-                boardGroup.rotation.z = flipProgress;
-                if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
-            }
-            if (backflipActive) {
-                backflipProgress += 0.22;
-                skaterSkeleton.rotation.x = -backflipProgress;
-                if (backflipProgress >= Math.PI * 2) { skaterSkeleton.rotation.x = 0; backflipActive = false; }
-            }
-            if (treflipActive) {
-                treflipProgress += 0.25;
-                boardGroup.rotation.y = treflipProgress * 2; 
-                boardGroup.rotation.z = treflipProgress;     
-                if (treflipProgress >= Math.PI * 2) { boardGroup.rotation.y = 0; boardGroup.rotation.z = 0; treflipActive = false; }
-            }
+            // Aerial Transformations (Suppressed during structural wipeout)
+            if (bailRecoveryTimer <= 0) {
+                if (flipActive) {
+                    flipProgress += 0.35; 
+                    boardGroup.rotation.z = flipProgress;
+                    if(flipProgress >= Math.PI*2) { boardGroup.rotation.z = 0; flipActive = false; }
+                }
+                if (backflipActive) {
+                    backflipProgress += 0.22;
+                    skaterSkeleton.rotation.x = -backflipProgress;
+                    if (backflipProgress >= Math.PI * 2) { skaterSkeleton.rotation.x = 0; backflipActive = false; }
+                }
+                if (treflipActive) {
+                    treflipProgress += 0.25;
+                    boardGroup.rotation.y = treflipProgress * 2; 
+                    boardGroup.rotation.z = treflipProgress;     
+                    if (treflipProgress >= Math.PI * 2) { boardGroup.rotation.y = 0; boardGroup.rotation.z = 0; treflipActive = false; }
+                }
 
-            if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
-            else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
+                if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
+                else { crouchAmt = Math.max(0, crouchAmt - 0.06); }
+            }
 
             // Grind rail alignment tracker
-            if (!isGrounded && yVelocity <= 0 && !isGrinding && skaterRoot.position.y > -0.1) {
+            if (!isGrounded && yVelocity <= 0 && !isGrinding && skaterRoot.position.y > -0.1 && bailRecoveryTimer <= 0) {
                 rails.forEach(rail => {
                     const pos = skaterRoot.position;
                     let cross = Math.abs((rail.end.z - rail.start.z)*pos.x - (rail.end.x - rail.start.x)*pos.z + rail.end.x*rail.start.z - rail.end.z*rail.start.x) / Math.sqrt(Math.pow(rail.end.z - rail.start.z,2) + Math.pow(rail.end.x - rail.start.x,2));
@@ -1026,9 +1088,13 @@
                 rails.forEach(rail => {
                     if(skaterRoot.position.z >= Math.min(rail.start.z, rail.end.z) - 1.0 && skaterRoot.position.z <= Math.max(rail.start.z, rail.end.z) + 1.0 && Math.abs(skaterRoot.position.x - rail.start.x) < 2.5) stillOn = true;
                 });
-                if(!stillOn || keys.space || isGameOver) {
-                    isGrinding = false; isGrounded = false; stopGrindSound();
-                    if(keys.space && !isGameOver) yVelocity = 0.22;
+                
+                // AUDIO AUDIO FIX: If we slip off tracking bounds or jump out, kill loop nodes instantly
+                if(!stillOn || keys.space || isGameOver || bailRecoveryTimer > 0) {
+                    isGrinding = false; 
+                    isGrounded = false; 
+                    stopGrindSound(); // Kills audio nodes immediately
+                    if(keys.space && !isGameOver && bailRecoveryTimer <= 0) yVelocity = 0.22;
                 }
             }
 
@@ -1039,14 +1105,17 @@
                 
                 if (yVelocity < 0 && skaterRoot.position.y <= groundHeight && groundHeight >= 0) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
-                    if(flipActive || backflipActive || treflipActive) { 
+                    
+                    if(flipActive || backflipActive || treflipActive || bailRecoveryTimer > 0) { 
                         bailCombo(); 
-                        boardGroup.rotation.set(0,0,0); skaterSkeleton.rotation.set(0,0,0);
+                        boardGroup.rotation.set(0,0,0); 
+                        if(bailRecoveryTimer <= 0) skaterSkeleton.rotation.set(0,0,0);
                         flipActive = false; backflipActive = false; treflipActive = false;
                     } else {
                         landingShake = 0.4;
                         spawnLandingParticles(skaterRoot.position.x, skaterRoot.position.y, skaterRoot.position.z);
                         landCombo();
+                        boardGroup.rotation.set(0,0,0);
                     }
                 }
             } else if (!isGrinding) {
@@ -1058,14 +1127,24 @@
                 npc.mesh.position.x += npc.speed * Math.sin(npc.angle);
                 npc.mesh.position.z += npc.speed * Math.cos(npc.angle);
                 npc.mesh.rotation.y = npc.angle;
+                
+                // Slowly decay rebound speeds back to normal cruising velocity
+                if(npc.speed > 0.18) npc.speed *= 0.98;
+
                 if(Math.abs(npc.mesh.position.x) > 114 || Math.abs(npc.mesh.position.z) > 114) {
                     npc.angle += Math.PI * (0.5 + Math.random() * 0.5);
+                    // Force wrap inside boundary
+                    npc.mesh.position.x = Math.max(-113, Math.min(113, npc.mesh.position.x));
+                    npc.mesh.position.z = Math.max(-113, Math.min(113, npc.mesh.position.z));
                 }
             });
 
-            leftLeg.position.y = 0.38 - (crouchAmt * 0.7);
-            rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
-            torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
+            // Leg layout adjustments based on crouch values
+            if (bailRecoveryTimer <= 0) {
+                leftLeg.position.y = 0.38 - (crouchAmt * 0.7);
+                rightLeg.position.y = 0.38 - (crouchAmt * 0.7);
+                torsoGroup.position.y = 0.75 - (crouchAmt * 1.0);
+            }
 
             const relativeOffset = new THREE.Vector3(0, 5.0, -10.5);
             const worldOffset = relativeOffset.applyMatrix4(skaterRoot.matrixWorld);
