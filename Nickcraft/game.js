@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. PROCEDURAL SOUND & TEXTURE SYSTEMS
+// 0. AUDIO CONTEXT ENGINE
 // =========================================================================
 let audioCtx = null;
 
@@ -23,6 +23,14 @@ function playSound(type) {
         gainNode.gain.setValueAtTime(0.4, now);
         gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
         osc.start(now); osc.stop(now + 0.15);
+    } else if (type === 'death') {
+        // High pitched supernatural poof sound for animal ghosts
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, now);
+        osc.frequency.exponentialRampToValueAtTime(900, now + 0.4);
+        gainNode.gain.setValueAtTime(0.3, now);
+        gainNode.gain.linearRampToValueAtTime(0.001, now + 0.4);
+        osc.start(now); osc.stop(now + 0.4);
     } else if (type === 'place') {
         osc.type = 'sine';
         osc.frequency.setValueAtTime(180, now);
@@ -62,11 +70,8 @@ function createVoxelTexture(baseColor, noiseColor, style) {
     ctx.fillStyle = noiseColor;
     for (let i = 0; i < 16; i++) {
         for (let j = 0; j < 16; j++) {
-            if (style === 'wood' && i % 4 === 0) {
-                ctx.fillRect(i, j, 1, 1);
-            } else if (Math.random() > 0.6) {
-                ctx.fillRect(i, j, 1, 1);
-            }
+            if (style === 'wood' && i % 4 === 0) ctx.fillRect(i, j, 1, 1);
+            else if (Math.random() > 0.6) ctx.fillRect(i, j, 1, 1);
         }
     }
     const texture = new THREE.CanvasTexture(canvas);
@@ -80,7 +85,7 @@ function createVoxelTexture(baseColor, noiseColor, style) {
 // =========================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.015); // Adjust visibility for 48x48 layout
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -96,7 +101,7 @@ directionalLight.castShadow = true;
 scene.add(directionalLight);
 
 // =========================================================================
-// 2. MATERIALS SETUP
+// 2. MATERIALS & WORLD GRID SETUP
 // =========================================================================
 const materials = {
     grass: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#557a2b', '#3f5e1f', 'noise') }),
@@ -104,15 +109,15 @@ const materials = {
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
-    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.8 }), // Dynamic water puddle material
+    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.8 }),
+    fence: new THREE.MeshStandardMaterial({ color: 0xb45309, roughness: 0.6 }), // Custom dark brown fence texture
     logo: new THREE.MeshStandardMaterial({ color: 0xd946ef })
 };
 
 const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 let activeBlocks = []; 
+let activeAnimals = []; // Tracks moving entity states separately
 let currentSelectedType = 'grass'; 
-
-// Increased World Size by 1.5x: 32 * 1.5 = 48 Blocks Grid
 const WORLD_SIZE = 48;
 
 function createBlock(x, y, z, type) {
@@ -124,81 +129,175 @@ function createBlock(x, y, z, type) {
     mesh.userData = { blockType: type };
     scene.add(mesh);
     activeBlocks.push(mesh);
+    return mesh;
 }
 
 function clearCurrentWorld() {
     activeBlocks.forEach(block => scene.remove(block));
+    activeAnimals.forEach(a => scene.remove(a.mesh));
     activeBlocks = [];
+    activeAnimals = [];
+}
+
+// Helper to determine accurate ground y position anywhere on the terrain grid
+function getGroundYAt(x, z) {
+    let highestY = 2; // Baseline default grass height
+    activeBlocks.forEach(b => {
+        if (Math.round(b.position.x) === Math.round(x) && Math.round(b.position.z) === Math.round(z)) {
+            if (b.userData.blockType !== 'water' && b.position.y > highestY) {
+                highestY = b.position.y;
+            }
+        }
+    });
+    return highestY;
 }
 
 // =========================================================================
-// 3. HAND AXE RE-SCALING SETUP (MADE SMALLER)
+// 3. RE-PROPORTIONED MINI AXE
 // =========================================================================
 const axeGroup = new THREE.Group();
-
-const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2 });
-// Reduced dimensions to make it less intrusive
-const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.16), bladeMat);
-bladeMesh.position.set(0, 0.25, -0.06);
+const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.18, 0.14), new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2 }));
+bladeMesh.position.set(0, 0.22, -0.05);
 axeGroup.add(bladeMesh);
 
-const handleMat = new THREE.MeshStandardMaterial({ color: 0x92400e });
-const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.5, 0.025), handleMat);
+const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.45, 0.02), new THREE.MeshStandardMaterial({ color: 0x92400e }));
 handleMesh.position.set(0, 0.05, 0);
 axeGroup.add(handleMesh);
 
-// Downscaled and shifted further down/right on screen out of view center
-axeGroup.scale.set(0.8, 0.8, 0.8);
-axeGroup.position.set(0.4, -0.4, -0.55); 
+axeGroup.scale.set(0.75, 0.75, 0.75);
+axeGroup.position.set(0.42, -0.42, -0.6); 
 axeGroup.rotation.set(0, Math.PI / 4, 0);
 camera.add(axeGroup);
 scene.add(camera);
 
-let axeSwingTimer = 0;
-let isAxeSwinging = false;
-
-function triggerAxeSwingAnimation() {
-    if (isAxeSwinging) return;
-    isAxeSwinging = true;
-    axeSwingTimer = 0;
-}
+let axeSwingTimer = 0, isAxeSwinging = false;
+function triggerAxeSwingAnimation() { if (!isAxeSwinging) { isAxeSwinging = true; axeSwingTimer = 0; } }
 
 function updateAxeAnimationLoop() {
     if (!isAxeSwinging) {
-        axeGroup.position.lerp(new THREE.Vector3(0.4, -0.4, -0.55), 0.1);
+        axeGroup.position.lerp(new THREE.Vector3(0.42, -0.42, -0.6), 0.1);
         axeGroup.rotation.set(0, Math.PI / 4, 0);
         return;
     }
-    axeSwingTimer += 0.18;
-    if (axeSwingTimer >= Math.PI) {
-        isAxeSwinging = false;
-        return;
-    }
-    const swingFactor = Math.sin(axeSwingTimer);
-    axeGroup.position.z = -0.55 - (swingFactor * 0.12);
-    axeGroup.position.y = -0.4 + (swingFactor * 0.06);
-    axeGroup.rotation.x = -swingFactor * 1.3; 
+    axeSwingTimer += 0.2;
+    if (axeSwingTimer >= Math.PI) { isAxeSwinging = false; return; }
+    const factor = Math.sin(axeSwingTimer);
+    axeGroup.position.z = -0.6 - (factor * 0.12);
+    axeGroup.position.y = -0.42 + (factor * 0.05);
+    axeGroup.rotation.x = -factor * 1.4; 
 }
 
 // =========================================================================
-// 4. LANDSCAPE MAP GENERATION (HILL, PUDDLE, RANDOM TREES, SIGN)
+// 4. ANIMALS BUILDER MACHINE (HORSE, DOGS, CATS, PIGS)
 // =========================================================================
-function spawnTree(trunkX, trunkZ, customHeight = 4) {
-    const baseY = 3; 
-    // Inject terrain-relative height offsets if a hill is underneath
-    let heightOffset = 0;
-    activeBlocks.forEach(b => {
-        if (Math.round(b.position.x) === trunkX && Math.round(b.position.z) === trunkZ) {
-            if (b.position.y >= heightOffset) heightOffset = b.position.y - 1;
+const animalConfig = [
+    { type: 'horse', color: 0x78350f, size: [0.7, 0.8, 1.2], count: 1 },
+    { type: 'dog', color: 0xd97706, size: [0.4, 0.5, 0.7], count: 2 },
+    { type: 'cat', color: 0xf59e0b, size: [0.3, 0.35, 0.5], count: 2 },
+    { type: 'pig', color: 0xf472b6, size: [0.5, 0.5, 0.8], count: 3 }
+];
+
+function spawnAnimals() {
+    animalConfig.forEach(cfg => {
+        for (let i = 0; i < cfg.count; i++) {
+            // Pick arbitrary coordinates away from the center/spawn zone
+            const rx = Math.floor(5 + Math.random() * (WORLD_SIZE - 10));
+            const rz = Math.floor(5 + Math.random() * (WORLD_SIZE - 10));
+            const ry = getGroundYAt(rx, rz) + (cfg.size[1] / 2) + 0.5;
+
+            const group = new THREE.Group();
+            
+            // Core main torso block
+            const bodyMat = new THREE.MeshStandardMaterial({ color: cfg.color, roughness: 0.8 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), bodyMat);
+            body.castShadow = true;
+            group.add(body);
+
+            // Miniature head box attachment offset
+            const headSize = cfg.size[0] * 0.8;
+            const head = new THREE.Mesh(new THREE.BoxGeometry(headSize, headSize, headSize), bodyMat);
+            head.position.set(0, cfg.size[1] * 0.5, -cfg.size[2] * 0.5);
+            head.castShadow = true;
+            group.add(head);
+
+            group.position.set(rx, ry, rz);
+            scene.add(group);
+
+            activeAnimals.push({
+                mesh: group,
+                type: cfg.type,
+                isGhost: false,
+                ghostTimer: 0,
+                moveTimer: Math.random() * 5,
+                vx: 0, vz: 0,
+                baseYOffset: cfg.size[1] / 2
+            });
         }
     });
+}
 
-    const spawnY = baseY + heightOffset;
+function updateAnimalsLoop() {
+    activeAnimals.forEach(a => {
+        if (a.isGhost) {
+            // Ghost flying away logic
+            a.mesh.position.y += 0.08;
+            a.mesh.rotation.y += 0.04;
+            a.ghostTimer += 0.016;
+            
+            // Linearly drop transparency levels matching ghost ascension curves
+            a.mesh.children.forEach(child => {
+                if (child.material) {
+                    child.material.opacity = Math.max(0, 1 - (a.ghostTimer / 1.5));
+                }
+            });
+
+            if (a.ghostTimer >= 1.5) {
+                scene.remove(a.mesh);
+                activeAnimals = activeAnimals.filter(item => item !== a);
+            }
+            return;
+        }
+
+        // Standard animal wandering kinematics
+        a.moveTimer -= 0.016;
+        if (a.moveTimer <= 0) {
+            a.moveTimer = 2 + Math.random() * 4;
+            if (Math.random() > 0.4) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.03;
+                a.vx = Math.cos(angle) * speed;
+                a.vz = Math.sin(angle) * speed;
+                a.mesh.rotation.y = -angle + Math.PI/2;
+            } else {
+                a.vx = 0; a.vz = 0;
+            }
+        }
+
+        a.mesh.position.x += a.vx;
+        a.mesh.position.z += a.vz;
+
+        // Contain animal coords tightly inside perimeter lines
+        a.mesh.position.x = Math.max(2, Math.min(WORLD_SIZE - 2, a.mesh.position.x));
+        a.mesh.position.z = Math.max(2, Math.min(WORLD_SIZE - 2, a.mesh.position.z));
+
+        // Snap vertical alignment tightly down over terrain levels 
+        const currentGround = getGroundYAt(a.mesh.position.x, a.mesh.position.z);
+        a.mesh.position.y = currentGround + 0.5 + a.baseYOffset;
+    });
+}
+
+// =========================================================================
+// 5. LANDSCAPE GENERATION WITH WOODEN PERIMETER FENCES
+// =========================================================================
+function spawnTree(trunkX, trunkZ, customHeight = 4) {
+    // Look up surface geometry to ensure precise grounding
+    const surfaceY = getGroundYAt(trunkX, trunkZ);
+    const startY = surfaceY + 1;
 
     for (let h = 0; h < customHeight; h++) {
-        createBlock(trunkX, spawnY + h, trunkZ, 'wood');
+        createBlock(trunkX, startY + h, trunkZ, 'wood');
     }
-    const leafHeight = spawnY + customHeight;
+    const leafHeight = startY + customHeight;
     for (let lx = -1; lx <= 1; lx++) {
         for (let lz = -1; lz <= 1; lz++) {
             createBlock(trunkX + lx, leafHeight - 1, trunkZ + lz, 'leaves');
@@ -208,61 +307,30 @@ function spawnTree(trunkX, trunkZ, customHeight = 4) {
     createBlock(trunkX, leafHeight + 1, trunkZ, 'leaves');
 }
 
-const signMatrix = [
-    [1,0,0,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,0,0,1],
-    [1,1,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,1,0],
-    [1,0,1,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,1,0,0],
-    [1,0,0,1,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,0,1,0],
-    [1,0,0,1,0,0,1,1,1,1,0,0,1,1,1,1,0,0,1,0,0,1]
-];
-
-function buildNickSign() {
-    const startX = (WORLD_SIZE / 2) - 11;
-    const startY = 12; 
-    const zPos = 12;   
-    for (let row = 0; row < signMatrix.length; row++) {
-        for (let col = 0; col < signMatrix[row].length; col++) {
-            if (signMatrix[row][col] === 1) {
-                const blockY = startY + (signMatrix.length - 1 - row);
-                createBlock(startX + col, blockY, zPos, 'logo');
-            }
-        }
-    }
-}
-
 function generateDefaultWorld() {
     clearCurrentWorld();
     
-    // Centers of terrain features
     const hillCenterX = 12, hillCenterZ = 14;
     const puddleCenterX = 30, puddleCenterZ = 32;
 
+    // Phase 1: Build base floor and hill terrains
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
-            
-            // 1. Calculate Hill math formula (spherical radius curve drop)
             const distToHill = Math.sqrt(Math.pow(x - hillCenterX, 2) + Math.pow(z - hillCenterZ, 2));
             let hillHeight = 0;
-            if (distToHill < 8) {
-                hillHeight = Math.round((8 - distToHill) * 0.6);
-            }
+            if (distToHill < 8) hillHeight = Math.round((8 - distToHill) * 0.6);
 
-            // 2. Calculate Puddle placement logic
             const distToPuddle = Math.sqrt(Math.pow(x - puddleCenterX, 2) + Math.pow(z - puddleCenterZ, 2));
             const isPuddle = distToPuddle < 5;
 
-            // Render Core Layers
             createBlock(x, 0, z, 'stone');
             
             if (isPuddle) {
-                // Carve a hole down and fill with water blocks
                 createBlock(x, 1, z, 'stone');
                 createBlock(x, 2, z, 'water');
             } else {
-                // Build normal ground up + hill heights stacked layer blocks
                 createBlock(x, 1, z, 'dirt');
                 createBlock(x, 2, z, 'grass');
-                
                 for (let h = 0; h < hillHeight; h++) {
                     createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
                 }
@@ -270,25 +338,34 @@ function generateDefaultWorld() {
         }
     }
     
-    buildNickSign();
-    
-    // Spawn 4 trees (Original 2 + 2 brand new randomized size variants)
-    spawnTree(8, 26, 4);   // Tree 1
-    spawnTree(38, 14, 4);  // Tree 2
-    spawnTree(12, 14, 5);  // New Tree 3 (Tall size variant on top of the hill!)
-    spawnTree(22, 38, 3);  // New Tree 4 (Short cute size variant near the landscape center!)
+    // Phase 2: Generate fence barriers around edges
+    for (let i = 0; i < WORLD_SIZE; i++) {
+        // North & South Edges
+        const gyN = getGroundYAt(i, 0); createBlock(i, gyN + 1, 0, 'fence');
+        const gyS = getGroundYAt(i, WORLD_SIZE - 1); createBlock(i, gyS + 1, WORLD_SIZE - 1, 'fence');
+        
+        // East & West Edges
+        const gyE = getGroundYAt(0, i); createBlock(0, gyE + 1, i, 'fence');
+        const gyW = getGroundYAt(WORLD_SIZE - 1, i); createBlock(WORLD_SIZE - 1, gyW + 1, i, 'fence');
+    }
 
+    // Phase 3: Plant completely grounded trees
+    spawnTree(8, 26, 4);   
+    spawnTree(38, 14, 4);  
+    spawnTree(12, 14, 5);  // Perfectly sits on top of hill now!
+    spawnTree(22, 38, 3);  
+
+    spawnAnimals();
     camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 4);
 }
 
 generateDefaultWorld();
 
 // =========================================================================
-// 5. UNIFIED NATURAL CAMERA TRACKING ENGINE
+// 6. CAMERA LOOK DRAG CHANNELS
 // =========================================================================
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-let lastTrackX = 0, lastTrackY = 0;
-let isDraggingCamera = false;
+let lastTrackX = 0, lastTrackY = 0, isDraggingCamera = false;
 
 function getEventCoords(e) {
     if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -297,8 +374,7 @@ function getEventCoords(e) {
 
 function startTracking(e) {
     if (e.target.closest('#menu') || e.target.closest('.touch-zone')) return;
-    initAudio();
-    isDraggingCamera = true;
+    initAudio(); isDraggingCamera = true;
     const coords = getEventCoords(e);
     lastTrackX = coords.x; lastTrackY = coords.y;
 }
@@ -306,45 +382,34 @@ function startTracking(e) {
 function moveTracking(e) {
     if (!isDraggingCamera) return;
     const coords = getEventCoords(e);
-    const deltaX = coords.x - lastTrackX;
-    const deltaY = coords.y - lastTrackY;
-    
+    const deltaX = coords.x - lastTrackX; const deltaY = coords.y - lastTrackY;
     lastTrackX = coords.x; lastTrackY = coords.y;
 
-    const lookSpeed = 0.005;
     euler.setFromQuaternion(camera.quaternion);
-    
-    euler.y -= deltaX * lookSpeed; 
-    euler.x -= deltaY * lookSpeed; // Drag down -> look down mapping
-    
+    euler.y -= deltaX * 0.005; euler.x -= deltaY * 0.005;
     euler.x = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, euler.x));
     camera.quaternion.setFromEuler(euler);
 }
 
-function stopTracking() { isDraggingCamera = false; }
-
 document.addEventListener('touchstart', startTracking, { passive: true });
 document.addEventListener('touchmove', moveTracking, { passive: true });
-document.addEventListener('touchend', stopTracking);
+document.addEventListener('touchend', () => isDraggingCamera = false);
 document.addEventListener('mousedown', startTracking);
 document.addEventListener('mousemove', moveTracking);
-document.addEventListener('mouseup', stopTracking);
+document.addEventListener('mouseup', () => isDraggingCamera = false);
 
 // =========================================================================
-// 6. RETRO D-PAD COMPASS MOVEMENT BINDINGS
+// 7. MOVEMENT INTERFACE MANAGEMENT (D-PAD STATE ROUTER)
 // =========================================================================
 const moveDirections = { forward: false, backward: false, left: false, right: false };
 
 function bindDpadDirection(elementId, flagName) {
     const btn = document.getElementById(elementId);
-    
     const press = (e) => { e.preventDefault(); initAudio(); moveDirections[flagName] = true; };
     const release = () => { moveDirections[flagName] = false; };
     
-    btn.addEventListener('touchstart', press);
-    btn.addEventListener('touchend', release);
-    btn.addEventListener('mousedown', press);
-    btn.addEventListener('mouseup', release);
+    btn.addEventListener('touchstart', press); btn.addEventListener('touchend', release);
+    btn.addEventListener('mousedown', press); btn.addEventListener('mouseup', release);
     btn.addEventListener('mouseleave', release);
 }
 
@@ -353,143 +418,126 @@ bindDpadDirection('dpad-down', 'backward');
 bindDpadDirection('dpad-left', 'left');
 bindDpadDirection('dpad-right', 'right');
 
-window.setBlockType = function(type) { 
-    currentSelectedType = type; 
-    playSound('ui'); 
-};
+window.setBlockType = function(t) { currentSelectedType = t; playSound('ui'); };
 
 // =========================================================================
-// 7. GRAVITY & VELOCITY PIPELINE PHYSICS
+// 8. PHYSICS ENGINE (JUMP & DOUBLE-JUMP Mechanics)
 // =========================================================================
-let playerVelocityY = 0;
-let remainingJumpsCount = 2; 
-const GRAVITY_CONSTANT = 0.009;
-const FORCE_JUMP = 0.16;
-const FLOOR_LEVEL_HEIGHT = 4.5; 
+let playerVelocityY = 0, remainingJumpsCount = 2; 
+const GRAVITY_CONSTANT = 0.009, FORCE_JUMP = 0.16, FLOOR_LEVEL_HEIGHT = 4.5; 
 
 function triggerJumpAction(e) {
     if (e) e.preventDefault();
     initAudio();
     if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
-        playerVelocityY = FORCE_JUMP;
-        remainingJumpsCount = 1; 
-        playSound('jump1');
+        playerVelocityY = FORCE_JUMP; remainingJumpsCount = 1; playSound('jump1');
     } else if (remainingJumpsCount === 1) {
-        playerVelocityY = FORCE_JUMP * 0.95; 
-        remainingJumpsCount = 0; 
-        playSound('jump2');
+        playerVelocityY = FORCE_JUMP * 0.95; remainingJumpsCount = 0; playSound('jump2');
     }
 }
-
-const jumpPad = document.getElementById('jump-pad');
-jumpPad.addEventListener('touchstart', triggerJumpAction);
-jumpPad.addEventListener('mousedown', triggerJumpAction);
+document.getElementById('jump-pad').addEventListener('touchstart', triggerJumpAction);
+document.getElementById('jump-pad').addEventListener('mousedown', triggerJumpAction);
 
 function processPhysicsPipeline() {
-    playerVelocityY -= GRAVITY_CONSTANT;
-    camera.position.y += playerVelocityY;
-    
+    playerVelocityY -= GRAVITY_CONSTANT; camera.position.y += playerVelocityY;
     if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
-        camera.position.y = FLOOR_LEVEL_HEIGHT;
-        playerVelocityY = 0;
-        remainingJumpsCount = 2; 
+        camera.position.y = FLOOR_LEVEL_HEIGHT; playerVelocityY = 0; remainingJumpsCount = 2; 
     }
 }
 
 // =========================================================================
-// 8. INTERACTION HANDLERS (PLACE / BREAK)
+// 9. BREAK / PLACE INTERACTION RAYCASTER & GHOST TRIGGER
 // =========================================================================
 const raycaster = new THREE.Raycaster();
 const screenCenter = new THREE.Vector2(0, 0);
 
 function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
-    const intersects = raycaster.intersectObjects(activeBlocks);
-
     if (!isPlacement) triggerAxeSwingAnimation();
 
+    // Check animal hits first when hitting BREAK
+    if (!isPlacement) {
+        // Collect mesh contents inside standard bounding boxes
+        const animalMeshes = activeAnimals.filter(a => !a.isGhost).map(a => a.mesh.children[0]);
+        const animalIntersects = raycaster.intersectObjects(animalMeshes);
+        
+        if (animalIntersects.length > 0 && animalIntersects[0].distance < 8) {
+            const hitChild = animalIntersects[0].object;
+            const parentGroup = hitChild.parent;
+            const animalObject = activeAnimals.find(a => a.mesh === parentGroup);
+            
+            if (animalObject) {
+                playSound('death');
+                animalObject.isGhost = true; // Flag object to begin ghost ascension update loop
+                
+                // Convert materials to transparent modes
+                parentGroup.children.forEach(child => {
+                    if (child.material) {
+                        child.material = child.material.clone();
+                        child.material.transparent = true;
+                        child.material.color.setHex(0xffffff); // Turn pure ghostly white
+                    }
+                });
+                return;
+            }
+        }
+    }
+
+    // Default block creation / destruction fallback routines
+    const intersects = raycaster.intersectObjects(activeBlocks);
     if (intersects.length > 0 && intersects[0].distance < 10) { 
         const hitBlock = intersects[0].object;
-        if (hitBlock.userData.blockType === 'water') return; // Cannot break water blocks
+        if (hitBlock.userData.blockType === 'water') return;
 
         if (!isPlacement) {
-            playSound('break'); 
-            scene.remove(hitBlock);
+            playSound('break'); scene.remove(hitBlock);
             activeBlocks = activeBlocks.filter(b => b !== hitBlock);
         } else {
             playSound('place'); 
             const normal = intersects[0].face.normal;
-            createBlock(
-                Math.round(hitBlock.position.x + normal.x),
-                Math.round(hitBlock.position.y + normal.y),
-                Math.round(hitBlock.position.z + normal.z),
-                currentSelectedType
-            );
+            createBlock(Math.round(hitBlock.position.x + normal.x), Math.round(hitBlock.position.y + normal.y), Math.round(hitBlock.position.z + normal.z), currentSelectedType);
         }
     }
 }
 
-const btnBreak = document.getElementById('mb-break');
-const btnPlace = document.getElementById('mb-place');
-
-btnBreak.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
-btnBreak.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
-btnPlace.addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
-btnPlace.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
+document.getElementById('mb-break').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(false); });
+document.getElementById('mb-break').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(false); });
+document.getElementById('mb-place').addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockAction(true); });
+document.getElementById('mb-place').addEventListener('touchstart', (e) => { e.preventDefault(); handleBlockAction(true); });
 
 window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 9. WORLD SAVING FILE EXPORTS
-// =========================================================================
-window.saveWorld = function() {
-    playSound('ui');
-    const saveData = activeBlocks.map(block => ({
-        x: block.position.x, y: block.position.y, z: block.position.z, type: block.userData.blockType
-    }));
-    localStorage.setItem('nickcraft_mobile_save', JSON.stringify(saveData));
-    alert('World Saved!');
-};
-
-window.loadWorld = function() {
-    playSound('ui');
-    const savedData = localStorage.getItem('nickcraft_mobile_save');
-    if (!savedData) return alert('No save found!');
-    clearCurrentWorld();
-    JSON.parse(savedData).forEach(b => createBlock(b.x, b.y, b.z, b.type));
-    alert('World Loaded!');
-};
-
-// =========================================================================
-// 10. REAL TIME ANIMATION COMPASS TICK LOOP
+// 10. REAL TIME ANIMATION TICK TICK TICK
 // =========================================================================
 const WALK_SPEED = 0.11; 
 
 function animate() {
     requestAnimationFrame(animate);
     
-    // Build directional vectors relative to camera look angle
     const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
     forwardVec.y = 0; forwardVec.normalize();
-    
     const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     rightVec.y = 0; rightVec.normalize();
 
-    // Process 4-way D-Pad translational vectors
     if (moveDirections.forward) camera.position.addScaledVector(forwardVec, WALK_SPEED);
     if (moveDirections.backward) camera.position.addScaledVector(forwardVec, -WALK_SPEED);
     if (moveDirections.left) camera.position.addScaledVector(rightVec, -WALK_SPEED);
     if (moveDirections.right) camera.position.addScaledVector(rightVec, WALK_SPEED);
     
+    // Lock character position safely inside fence walls
+    camera.position.x = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.x));
+    camera.position.z = Math.max(1.5, Math.min(WORLD_SIZE - 2.5, camera.position.z));
+
     processPhysicsPipeline();
     updateAxeAnimationLoop();
+    updateAnimalsLoop();
     
     renderer.render(scene, camera);
 }
 
 window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
