@@ -331,13 +331,13 @@
         const rampMaterial = new THREE.MeshLambertMaterial({ map: generateRampTexture(), side: THREE.DoubleSide });
         const railMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.85, roughness: 0.15 });
 
-        // Ground Mesh (Skatepark Concrete Pad)
+        // Ground Mesh
         const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), concreteMaterial);
         ground.rotation.x = -Math.PI / 2;
         ground.receiveShadow = true;
         scene.add(ground);
 
-        // Outside Grass Floor Surroundings
+        // Outside Grass Floor
         const grassFloor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), grassMaterial);
         grassFloor.rotation.x = -Math.PI / 2;
         grassFloor.position.y = -0.05; 
@@ -403,7 +403,7 @@
         }
         spawnParkSigns();
 
-        // Background Buildings Skyline
+        // Background Skyline
         function addBackgroundSkyline() {
             const houseColors = [0xaa4433, 0x4466aa, 0x558855, 0xddaa44, 0x887766];
             const buildingColors = [0x555555, 0x666666, 0x444444, 0x777777, 0x4a5560];
@@ -538,6 +538,7 @@
                 new THREE.CylinderGeometry(r, r, 0.05, 16),
                 new THREE.MeshBasicMaterial({ color: 0x111111 })
             );
+            return holeMesh;
             holeMesh.position.set(x, 0.01, z);
             scene.add(holeMesh);
 
@@ -713,7 +714,6 @@
         let backflipActive = false, backflipProgress = 0;
         let treflipActive = false, treflipProgress = 0;
 
-        // NEW: Air Spinning Tracker States
         let airSpinDelta = 0; 
         let spinTricksAwarded = { fs180: false, bs180: false, fs360: false, bs360: false };
 
@@ -878,6 +878,7 @@
             timerSeconds = 60; isGameOver = false; touchSteerDirection = 0; bailRecoveryTimer = 0;
             skaterRoot.position.set(0, 0, 40); heading = 0;
             skaterRoot.rotation.set(0,0,0); boardGroup.rotation.set(0,0,0); skaterSkeleton.rotation.set(0,0,0);
+            leftArmRoot.rotation.set(0,0,0); rightArmRoot.rotation.set(0,0,0);
             flipActive = false; backflipActive = false; treflipActive = false;
             isGrounded = true; isGrinding = false; ollieHold = false;
             airSpinDelta = 0; resetSpinAwards();
@@ -897,7 +898,6 @@
             }
             document.getElementById('top-right-hud').innerText = `${Math.floor(timerSeconds/60)}:${Math.floor(timerSeconds%60).toString().padStart(2,'0')}`;
 
-            // Process bail freeze recovery timeline window
             if(bailRecoveryTimer > 0) {
                 bailRecoveryTimer -= (1/60);
                 speed *= 0.85; 
@@ -908,7 +908,6 @@
                     skaterSkeleton.rotation.set(0, 0, 0);
                 }
 
-                // Air Spin Mechanic Implementation vs Ground Steering Control
                 let spinSpeed = 0.065; 
                 if (isGrounded) {
                     if (keys.a || touchSteerDirection === -1) heading += 0.046;
@@ -923,7 +922,6 @@
                         airSpinDelta -= spinSpeed;
                     }
 
-                    // Process dynamic scoring steps based on continuous rotation data
                     if (airSpinDelta >= Math.PI && !spinTricksAwarded.fs180) {
                         spinTricksAwarded.fs180 = true; registerTrick("FS 180", 150);
                     }
@@ -1053,6 +1051,7 @@
                 speed = 0;
                 boardGroup.rotation.set(0,0,0);
                 skaterSkeleton.rotation.set(0,0,0);
+                leftArmRoot.rotation.set(0,0,0); rightArmRoot.rotation.set(0,0,0);
                 airSpinDelta = 0; resetSpinAwards();
             }
 
@@ -1072,6 +1071,18 @@
                     boardGroup.rotation.y = treflipProgress * 2; 
                     boardGroup.rotation.z = treflipProgress;     
                     if (treflipProgress >= Math.PI * 2) { boardGroup.rotation.y = 0; boardGroup.rotation.z = 0; treflipActive = false; }
+                }
+
+                // Arm Trick Animations Look
+                if (!isGrounded && !isGrinding) {
+                    let armWave = Math.sin(Date.now() * 0.015) * 0.2;
+                    leftArmRoot.rotation.z = Math.PI * 0.65 + armWave;
+                    rightArmRoot.rotation.z = -Math.PI * 0.65 - armWave;
+                    leftArmRoot.rotation.x = Math.sin(Date.now() * 0.01) * 0.3;
+                    rightArmRoot.rotation.x = Math.sin(Date.now() * 0.01 + 1) * 0.3;
+                } else {
+                    leftArmRoot.rotation.set(0, 0, 0);
+                    rightArmRoot.rotation.set(0, 0, 0);
                 }
 
                 if (ollieHold && isGrounded) { crouchAmt = Math.min(0.4, crouchAmt + 0.04); speed *= 0.95; }
@@ -1119,20 +1130,9 @@
                 if (yVelocity < 0 && skaterRoot.position.y <= groundHeight && groundHeight >= 0) {
                     skaterRoot.position.y = groundHeight; yVelocity = 0; isGrounded = true;
                     
-                    // NEW: Calculate landing angle check. If alignment is off by more than ~45 degrees, wipeout!
-                    let rawDegrees = (airSpinDelta * 180 / Math.PI);
-                    let landingMisalignment = Math.abs(rawDegrees % 180);
-                    if (landingMisalignment > 90) landingMisalignment = 180 - landingMisalignment;
-                    
-                    let fellSideways = (landingMisalignment > 45);
-
-                    if(flipActive || backflipActive || treflipActive || bailRecoveryTimer > 0 || fellSideways) { 
-                        bailCombo(fellSideways ? "WIPEOUT! SKETCHY LANDING" : "WIPEOUT! BAIL"); 
+                    if(flipActive || backflipActive || treflipActive || bailRecoveryTimer > 0) { 
+                        bailCombo("WIPEOUT! BAIL"); 
                         boardGroup.rotation.set(0,0,0); 
-                        if(bailRecoveryTimer <= 0 && fellSideways) {
-                            bailRecoveryTimer = 1.2;
-                            speed *= -0.2;
-                        }
                         flipActive = false; backflipActive = false; treflipActive = false;
                     } else {
                         landingShake = 0.4;
