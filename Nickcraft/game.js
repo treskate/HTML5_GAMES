@@ -1,5 +1,5 @@
 // =========================================================================
-// 0. PROCEDURAL TEXTURES & EXPANDED AUDIO ENGINE
+// 0. PROCEDURAL SOUND & TEXTURE SYSTEMS
 // =========================================================================
 let audioCtx = null;
 
@@ -31,7 +31,6 @@ function playSound(type) {
         gainNode.gain.linearRampToValueAtTime(0.01, now + 0.08);
         osc.start(now); osc.stop(now + 0.08);
     } else if (type === 'jump1') {
-        // First jump sound effect (low to mid sweep)
         osc.type = 'triangle';
         osc.frequency.setValueAtTime(150, now);
         osc.frequency.exponentialRampToValueAtTime(300, now + 0.12);
@@ -39,7 +38,6 @@ function playSound(type) {
         gainNode.gain.linearRampToValueAtTime(0.01, now + 0.12);
         osc.start(now); osc.stop(now + 0.12);
     } else if (type === 'jump2') {
-        // High-pitch sci-fi double jump sound effect
         osc.type = 'sine';
         osc.frequency.setValueAtTime(350, now);
         osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
@@ -78,11 +76,11 @@ function createVoxelTexture(baseColor, noiseColor, style) {
 }
 
 // =========================================================================
-// 1. ENGINE & GRAPHICS SETUP
+// 1. ENGINE INITIALIZATION
 // =========================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); 
-scene.fog = new THREE.FogExp2(0x87CEEB, 0.02); 
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.015); // Adjust visibility for 48x48 layout
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -93,12 +91,12 @@ document.body.appendChild(renderer.domElement);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-directionalLight.position.set(40, 60, 20);
+directionalLight.position.set(60, 80, 40);
 directionalLight.castShadow = true;
 scene.add(directionalLight);
 
 // =========================================================================
-// 2. BLOCK ENGINE MATERIALS
+// 2. MATERIALS SETUP
 // =========================================================================
 const materials = {
     grass: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#557a2b', '#3f5e1f', 'noise') }),
@@ -106,13 +104,16 @@ const materials = {
     stone: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#737373', '#525252', 'noise') }),
     wood: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#f97316', '#c2410c', 'wood') }), 
     leaves: new THREE.MeshStandardMaterial({ map: createVoxelTexture('#166534', '#14532d', 'noise') }),
+    water: new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.1, transparent: true, opacity: 0.8 }), // Dynamic water puddle material
     logo: new THREE.MeshStandardMaterial({ color: 0xd946ef })
 };
 
 const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
 let activeBlocks = []; 
 let currentSelectedType = 'grass'; 
-const WORLD_SIZE = 32;
+
+// Increased World Size by 1.5x: 32 * 1.5 = 48 Blocks Grid
+const WORLD_SIZE = 48;
 
 function createBlock(x, y, z, type) {
     const material = materials[type] || materials.grass;
@@ -131,28 +132,27 @@ function clearCurrentWorld() {
 }
 
 // =========================================================================
-// 3. 3D ITEM HOLDER: HELD HAND AXE IMPLEMENTATION
+// 3. HAND AXE RE-SCALING SETUP (MADE SMALLER)
 // =========================================================================
 const axeGroup = new THREE.Group();
 
-// 1. Build an iron/stone pixel blade structure
 const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.2 });
-const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3, 0.25), bladeMat);
-bladeMesh.position.set(0, 0.4, -0.1);
+// Reduced dimensions to make it less intrusive
+const bladeMesh = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.2, 0.16), bladeMat);
+bladeMesh.position.set(0, 0.25, -0.06);
 axeGroup.add(bladeMesh);
 
-// 2. Build the wooden shaft handle structure
 const handleMat = new THREE.MeshStandardMaterial({ color: 0x92400e });
-const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.8, 0.04), handleMat);
-handleMesh.position.set(0, 0.1, 0);
+const handleMesh = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.5, 0.025), handleMat);
+handleMesh.position.set(0, 0.05, 0);
 axeGroup.add(handleMesh);
 
-// Scale, rotate, and pin the composite weapon securely onto the active viewport camera view
-axeGroup.scale.set(1, 1, 1);
-axeGroup.position.set(0.3, -0.35, -0.5); 
+// Downscaled and shifted further down/right on screen out of view center
+axeGroup.scale.set(0.8, 0.8, 0.8);
+axeGroup.position.set(0.4, -0.4, -0.55); 
 axeGroup.rotation.set(0, Math.PI / 4, 0);
 camera.add(axeGroup);
-scene.add(camera); // Appends tracking container directly to master layout
+scene.add(camera);
 
 let axeSwingTimer = 0;
 let isAxeSwinging = false;
@@ -163,42 +163,49 @@ function triggerAxeSwingAnimation() {
     axeSwingTimer = 0;
 }
 
-// Updates rotation values sequentially every ticks frame inside engine run
 function updateAxeAnimationLoop() {
     if (!isAxeSwinging) {
-        // Standard baseline walking idle position values
-        axeGroup.position.lerp(new THREE.Vector3(0.3, -0.35, -0.5), 0.1);
+        axeGroup.position.lerp(new THREE.Vector3(0.4, -0.4, -0.55), 0.1);
         axeGroup.rotation.set(0, Math.PI / 4, 0);
         return;
     }
-    
-    axeSwingTimer += 0.15;
+    axeSwingTimer += 0.18;
     if (axeSwingTimer >= Math.PI) {
         isAxeSwinging = false;
         return;
     }
-    
-    // Quick sine-wave forward chopping calculations
     const swingFactor = Math.sin(axeSwingTimer);
-    axeGroup.position.z = -0.5 - (swingFactor * 0.15);
-    axeGroup.position.y = -0.35 + (swingFactor * 0.08);
-    axeGroup.rotation.x = -swingFactor * 1.1; 
+    axeGroup.position.z = -0.55 - (swingFactor * 0.12);
+    axeGroup.position.y = -0.4 + (swingFactor * 0.06);
+    axeGroup.rotation.x = -swingFactor * 1.3; 
 }
 
 // =========================================================================
-// 4. GENERATION ARCHITECTURE
+// 4. LANDSCAPE MAP GENERATION (HILL, PUDDLE, RANDOM TREES, SIGN)
 // =========================================================================
-function spawnTree(trunkX, trunkZ) {
+function spawnTree(trunkX, trunkZ, customHeight = 4) {
     const baseY = 3; 
-    for (let h = 0; h < 4; h++) createBlock(trunkX, baseY + h, trunkZ, 'wood');
-    const leafHeight = baseY + 3;
+    // Inject terrain-relative height offsets if a hill is underneath
+    let heightOffset = 0;
+    activeBlocks.forEach(b => {
+        if (Math.round(b.position.x) === trunkX && Math.round(b.position.z) === trunkZ) {
+            if (b.position.y >= heightOffset) heightOffset = b.position.y - 1;
+        }
+    });
+
+    const spawnY = baseY + heightOffset;
+
+    for (let h = 0; h < customHeight; h++) {
+        createBlock(trunkX, spawnY + h, trunkZ, 'wood');
+    }
+    const leafHeight = spawnY + customHeight;
     for (let lx = -1; lx <= 1; lx++) {
         for (let lz = -1; lz <= 1; lz++) {
+            createBlock(trunkX + lx, leafHeight - 1, trunkZ + lz, 'leaves');
             createBlock(trunkX + lx, leafHeight, trunkZ + lz, 'leaves');
-            createBlock(trunkX + lx, leafHeight + 1, trunkZ + lz, 'leaves');
         }
     }
-    createBlock(trunkX, leafHeight + 2, trunkZ, 'leaves');
+    createBlock(trunkX, leafHeight + 1, trunkZ, 'leaves');
 }
 
 const signMatrix = [
@@ -211,8 +218,8 @@ const signMatrix = [
 
 function buildNickSign() {
     const startX = (WORLD_SIZE / 2) - 11;
-    const startY = 10; 
-    const zPos = 8;   
+    const startY = 12; 
+    const zPos = 12;   
     for (let row = 0; row < signMatrix.length; row++) {
         for (let col = 0; col < signMatrix[row].length; col++) {
             if (signMatrix[row][col] === 1) {
@@ -225,25 +232,60 @@ function buildNickSign() {
 
 function generateDefaultWorld() {
     clearCurrentWorld();
+    
+    // Centers of terrain features
+    const hillCenterX = 12, hillCenterZ = 14;
+    const puddleCenterX = 30, puddleCenterZ = 32;
+
     for (let x = 0; x < WORLD_SIZE; x++) {
         for (let z = 0; z < WORLD_SIZE; z++) {
+            
+            // 1. Calculate Hill math formula (spherical radius curve drop)
+            const distToHill = Math.sqrt(Math.pow(x - hillCenterX, 2) + Math.pow(z - hillCenterZ, 2));
+            let hillHeight = 0;
+            if (distToHill < 8) {
+                hillHeight = Math.round((8 - distToHill) * 0.6);
+            }
+
+            // 2. Calculate Puddle placement logic
+            const distToPuddle = Math.sqrt(Math.pow(x - puddleCenterX, 2) + Math.pow(z - puddleCenterZ, 2));
+            const isPuddle = distToPuddle < 5;
+
+            // Render Core Layers
             createBlock(x, 0, z, 'stone');
-            createBlock(x, 1, z, 'dirt');
-            createBlock(x, 2, z, 'grass');
+            
+            if (isPuddle) {
+                // Carve a hole down and fill with water blocks
+                createBlock(x, 1, z, 'stone');
+                createBlock(x, 2, z, 'water');
+            } else {
+                // Build normal ground up + hill heights stacked layer blocks
+                createBlock(x, 1, z, 'dirt');
+                createBlock(x, 2, z, 'grass');
+                
+                for (let h = 0; h < hillHeight; h++) {
+                    createBlock(x, 3 + h, z, (h === hillHeight - 1) ? 'grass' : 'dirt');
+                }
+            }
         }
     }
+    
     buildNickSign();
-    spawnTree(8, 20);
-    spawnTree(24, 22);
-    camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 2);
+    
+    // Spawn 4 trees (Original 2 + 2 brand new randomized size variants)
+    spawnTree(8, 26, 4);   // Tree 1
+    spawnTree(38, 14, 4);  // Tree 2
+    spawnTree(12, 14, 5);  // New Tree 3 (Tall size variant on top of the hill!)
+    spawnTree(22, 38, 3);  // New Tree 4 (Short cute size variant near the landscape center!)
+
+    camera.position.set(WORLD_SIZE / 2, 4.5, WORLD_SIZE - 4);
 }
 
 generateDefaultWorld();
 
 // =========================================================================
-// 5. UNIFIED CROSS-DEVICE LOOK CONTROL PIPELINE
+// 5. UNIFIED NATURAL CAMERA TRACKING ENGINE
 // =========================================================================
-let isMovingForward = false;
 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
 let lastTrackX = 0, lastTrackY = 0;
 let isDraggingCamera = false;
@@ -272,9 +314,8 @@ function moveTracking(e) {
     const lookSpeed = 0.005;
     euler.setFromQuaternion(camera.quaternion);
     
-    // Normal Looking Orientation mapping trackway
     euler.y -= deltaX * lookSpeed; 
-    euler.x -= deltaY * lookSpeed; 
+    euler.x -= deltaY * lookSpeed; // Drag down -> look down mapping
     
     euler.x = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, euler.x));
     camera.quaternion.setFromEuler(euler);
@@ -289,16 +330,28 @@ document.addEventListener('mousedown', startTracking);
 document.addEventListener('mousemove', moveTracking);
 document.addEventListener('mouseup', stopTracking);
 
-// Button Binding (MOVE PAD)
-const movePad = document.getElementById('move-pad');
-function startMoving(e) { e.preventDefault(); initAudio(); isMovingForward = true; }
-function stopMoving() { isMovingForward = false; }
+// =========================================================================
+// 6. RETRO D-PAD COMPASS MOVEMENT BINDINGS
+// =========================================================================
+const moveDirections = { forward: false, backward: false, left: false, right: false };
 
-movePad.addEventListener('touchstart', startMoving);
-movePad.addEventListener('touchend', stopMoving);
-movePad.addEventListener('mousedown', startMoving);
-movePad.addEventListener('mouseup', stopMoving);
-movePad.addEventListener('mouseleave', stopMoving);
+function bindDpadDirection(elementId, flagName) {
+    const btn = document.getElementById(elementId);
+    
+    const press = (e) => { e.preventDefault(); initAudio(); moveDirections[flagName] = true; };
+    const release = () => { moveDirections[flagName] = false; };
+    
+    btn.addEventListener('touchstart', press);
+    btn.addEventListener('touchend', release);
+    btn.addEventListener('mousedown', press);
+    btn.addEventListener('mouseup', release);
+    btn.addEventListener('mouseleave', release);
+}
+
+bindDpadDirection('dpad-up', 'forward');
+bindDpadDirection('dpad-down', 'backward');
+bindDpadDirection('dpad-left', 'left');
+bindDpadDirection('dpad-right', 'right');
 
 window.setBlockType = function(type) { 
     currentSelectedType = type; 
@@ -306,51 +359,45 @@ window.setBlockType = function(type) {
 };
 
 // =========================================================================
-// 6. REAL TIME PHYSICS ENGINE (GRAVITY, JUMP, DOUBLE-JUMP)
+// 7. GRAVITY & VELOCITY PIPELINE PHYSICS
 // =========================================================================
 let playerVelocityY = 0;
-let remainingJumpsCount = 2; // Allows initial + air double-jump allocation
+let remainingJumpsCount = 2; 
 const GRAVITY_CONSTANT = 0.009;
 const FORCE_JUMP = 0.16;
-const FLOOR_LEVEL_HEIGHT = 4.5; // Walking viewpoint scale baseline
+const FLOOR_LEVEL_HEIGHT = 4.5; 
 
 function triggerJumpAction(e) {
     if (e) e.preventDefault();
     initAudio();
-    
     if (camera.position.y === FLOOR_LEVEL_HEIGHT) {
-        // Grounded Jump Execution
         playerVelocityY = FORCE_JUMP;
         remainingJumpsCount = 1; 
         playSound('jump1');
     } else if (remainingJumpsCount === 1) {
-        // Air Double-Jump Execution
-        playerVelocityY = FORCE_JUMP * 0.95; // Slightly damp second vault force scaling
+        playerVelocityY = FORCE_JUMP * 0.95; 
         remainingJumpsCount = 0; 
         playSound('jump2');
     }
 }
 
-// Connect layout triggers safely over layout buttons container
 const jumpPad = document.getElementById('jump-pad');
 jumpPad.addEventListener('touchstart', triggerJumpAction);
 jumpPad.addEventListener('mousedown', triggerJumpAction);
 
 function processPhysicsPipeline() {
-    // Apply constant downwards velocity deceleration scaling
     playerVelocityY -= GRAVITY_CONSTANT;
     camera.position.y += playerVelocityY;
     
-    // Check collisions with standard floor map limit plane
     if (camera.position.y <= FLOOR_LEVEL_HEIGHT) {
         camera.position.y = FLOOR_LEVEL_HEIGHT;
         playerVelocityY = 0;
-        remainingJumpsCount = 2; // Refresh counters safely
+        remainingJumpsCount = 2; 
     }
 }
 
 // =========================================================================
-// 7. INTERACTION CONTROLLER: BLOCKS DESTRUCTION/CONSTRUCTION
+// 8. INTERACTION HANDLERS (PLACE / BREAK)
 // =========================================================================
 const raycaster = new THREE.Raycaster();
 const screenCenter = new THREE.Vector2(0, 0);
@@ -359,10 +406,12 @@ function handleBlockAction(isPlacement) {
     raycaster.setFromCamera(screenCenter, camera);
     const intersects = raycaster.intersectObjects(activeBlocks);
 
-    if (!isPlacement) triggerAxeSwingAnimation(); // Trigger axe swing every single time you hit BREAK!
+    if (!isPlacement) triggerAxeSwingAnimation();
 
     if (intersects.length > 0 && intersects[0].distance < 10) { 
         const hitBlock = intersects[0].object;
+        if (hitBlock.userData.blockType === 'water') return; // Cannot break water blocks
+
         if (!isPlacement) {
             playSound('break'); 
             scene.remove(hitBlock);
@@ -391,7 +440,7 @@ btnPlace.addEventListener('mousedown', (e) => { e.preventDefault(); handleBlockA
 window.addEventListener('contextmenu', e => e.preventDefault());
 
 // =========================================================================
-// 8. STORAGE PACKS
+// 9. WORLD SAVING FILE EXPORTS
 // =========================================================================
 window.saveWorld = function() {
     playSound('ui');
@@ -412,19 +461,25 @@ window.loadWorld = function() {
 };
 
 // =========================================================================
-// 9. ANIMATION & MAIN RENDERING TICK LOOP
+// 10. REAL TIME ANIMATION COMPASS TICK LOOP
 // =========================================================================
-const SPEED = 0.12; 
+const WALK_SPEED = 0.11; 
 
 function animate() {
     requestAnimationFrame(animate);
     
-    // Movement translation processing engine lines
-    if (isMovingForward) {
-        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-        forward.y = 0; forward.normalize();
-        camera.position.addScaledVector(forward, SPEED);
-    }
+    // Build directional vectors relative to camera look angle
+    const forwardVec = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    forwardVec.y = 0; forwardVec.normalize();
+    
+    const rightVec = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    rightVec.y = 0; rightVec.normalize();
+
+    // Process 4-way D-Pad translational vectors
+    if (moveDirections.forward) camera.position.addScaledVector(forwardVec, WALK_SPEED);
+    if (moveDirections.backward) camera.position.addScaledVector(forwardVec, -WALK_SPEED);
+    if (moveDirections.left) camera.position.addScaledVector(rightVec, -WALK_SPEED);
+    if (moveDirections.right) camera.position.addScaledVector(rightVec, WALK_SPEED);
     
     processPhysicsPipeline();
     updateAxeAnimationLoop();
