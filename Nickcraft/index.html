@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nickcraft - 3D Web Sandbox</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background: #87CEEB; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 1px 1px 2px black; pointer-events: none; }
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 10px; height: 10px; background: white; transform: translate(-50%, -50%); pointer-events: none; mix-blend-mode: difference; }
+        #menu { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; display: flex; gap: 10px; }
+        button { padding: 8px 16px; background: #4CAF50; color: white; border: none; cursor: pointer; border-radius: 3px; font-weight: bold; pointer-events: auto; }
+        button:hover { background: #45a049; }
+        .save-btn { background: #008CBA; }
+        .save-btn:hover { background: #007B9A; }
+    </style>
+    <!-- We load Three.js from a secure web link (CDN) so you don't have to download it manually -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>Nickcraft v1.0</h1>
+        <p>Controls: WASD to Move | Space to Jump | Left-Click to Break | Right-Click to Place</p>
+        <p>Click screen to lock mouse cursor. Press Esc to escape.</p>
+    </div>
+    
+    <div id="crosshair"></div>
+
+    <div id="menu">
+        <button onclick="setBlockType('grass')">Grass</button>
+        <button onclick="setBlockType('dirt')">Dirt</button>
+        <button onclick="setBlockType('stone')">Stone</button>
+        <button class="save-btn" onclick="saveWorld()">Save World</button>
+        <button class="save-btn" onclick="loadWorld()">Load World</button>
+    </div>
+
+    <!-- This links to your game logic file -->
+    <script src="game.js"></script>
+</body>
+</html>
