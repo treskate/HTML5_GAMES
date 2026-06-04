@@ -36,10 +36,6 @@ function playSound(type) {
         osc.frequency.exponentialRampToValueAtTime(580, now + 0.14);
         gainNode.gain.setValueAtTime(0.22, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.14);
         osc.start(now); osc.stop(now + 0.14);
-    } else if (type === 'crackle') {
-        osc.type = 'square'; osc.frequency.setValueAtTime(65 + Math.random() * 35, now);
-        gainNode.gain.setValueAtTime(0.06, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.04);
-        osc.start(now); osc.stop(now + 0.04);
     } else if (type === 'ui') {
         osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
         gainNode.gain.setValueAtTime(0.05, now); gainNode.gain.linearRampToValueAtTime(0.01, now + 0.05);
@@ -271,11 +267,12 @@ function updateFirepitsLoop() {
         
         if (Math.random() > 0.93) {
             f.fire.material.color.setHex(Math.random() > 0.4 ? 0xf97316 : 0xef4444);
-            if (Math.random() > 0.8) playSound('crackle');
         }
+        
         f.smokeTimer += 1; if (f.smokeTimer % 22 === 0) spawnSmokeParticle(f.x, f.y, f.z);
         
         const dx = camera.position.x - f.x; const dz = camera.position.z - f.z; const dist = Math.sqrt(dx*dx + dz*dz);
+
         if (dist < 1.1 && Math.abs(camera.position.y - f.y) < 1.8) {
             playerVelocityY = 0.13; camera.position.x += (dx === 0 ? 0.2 : Math.sign(dx) * 0.22); camera.position.z += (dz === 0 ? 0.2 : Math.sign(dz) * 0.22);
             playSound('jump2');
@@ -306,7 +303,10 @@ function manageZombieSpawnsAndSunburns() {
             
             if (safeFromFire) {
                 const ry = getGroundYAt(rx, rz);
-                const zm = buildZombieMesh(); zm.position.set(rx, ry, rz); scene.add(zm);
+                const zm = buildZombieMesh(); 
+                // Standing adjustments so zombies are perfectly on top of blocks rather than halfway buried
+                zm.position.set(rx, ry + 0.375, rz); 
+                scene.add(zm);
                 activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 3 });
             }
         }
@@ -348,7 +348,7 @@ function updateZombiesLoop() {
             z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED;
             z.mesh.rotation.y = -angle - Math.PI/2;
 
-            if (distanceToPlayer < 1.3 && Math.abs(camera.position.y - (z.mesh.position.y + 1)) < 1.5) {
+            if (distanceToPlayer < 1.3 && Math.abs(camera.position.y - (z.mesh.position.y + 0.6)) < 1.5) {
                 playSound('hurt');
                 playerVelocityY = 0.06; 
                 camera.position.x += Math.cos(angle) * 0.8;
@@ -358,7 +358,7 @@ function updateZombiesLoop() {
 
         z.mesh.position.x = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.x));
         z.mesh.position.z = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.z));
-        z.mesh.position.y = getGroundYAt(z.mesh.position.x, z.mesh.position.z);
+        z.mesh.position.y = getGroundYAt(z.mesh.position.x, z.mesh.position.z) + 0.375;
     });
 }
 
