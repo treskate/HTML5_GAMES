@@ -281,15 +281,16 @@ function updateFirepitsLoop() {
 }
 
 // =========================================================================
-// 6. ZOMBIE NIGHT SPAWNS & FIREPIT REPELLENT AI
+// 6. ZOMBIE NIGHT SPAWNS (2X BIGGER) & FIREPIT REPELLENT AI
 // =========================================================================
 function buildZombieMesh() {
     const group = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.75, 0.4), materials.zombieShirt); body.position.y = 0.375; body.castShadow = true; group.add(body);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.45, 0.45), materials.zombieSkin); head.position.y = 0.975; head.castShadow = true; group.add(head);
-    const armGeo = new THREE.BoxGeometry(0.15, 0.15, 0.55);
-    const leftArm = new THREE.Mesh(armGeo, materials.zombieSkin); leftArm.position.set(-0.35, 0.6, -0.2); leftArm.castShadow = true; group.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeo, materials.zombieSkin); rightArm.position.set(0.35, 0.6, -0.2); rightArm.castShadow = true; group.add(rightArm);
+    // Dimensions doubled (originally body: 0.6x0.75x0.4, head: 0.45x0.45x0.45, arms: 0.15x0.15x0.55)
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 0.8), materials.zombieShirt); body.position.y = 0.75; body.castShadow = true; group.add(body);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), materials.zombieSkin); head.position.y = 1.95; head.castShadow = true; group.add(head);
+    const armGeo = new THREE.BoxGeometry(0.3, 0.3, 1.1);
+    const leftArm = new THREE.Mesh(armGeo, materials.zombieSkin); leftArm.position.set(-0.7, 1.2, -0.4); leftArm.castShadow = true; group.add(leftArm);
+    const rightArm = new THREE.Mesh(armGeo, materials.zombieSkin); rightArm.position.set(0.7, 1.2, -0.4); rightArm.castShadow = true; group.add(rightArm);
     return group;
 }
 
@@ -304,16 +305,16 @@ function manageZombieSpawnsAndSunburns() {
             if (safeFromFire) {
                 const ry = getGroundYAt(rx, rz);
                 const zm = buildZombieMesh(); 
-                // Standing adjustments so zombies are perfectly on top of blocks rather than halfway buried
-                zm.position.set(rx, ry + 0.375, rz); 
+                // Standing alignment offsets scaled up perfectly to fit the 2x taller frame on top of blocks
+                zm.position.set(rx, ry + 0.75, rz); 
                 scene.add(zm);
-                activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 3 });
+                activeZombies.push({ mesh: zm, x: rx, z: rz, y: ry, hitpoints: 5 }); // Buffed HP slightly for the big guys
             }
         }
     } else {
         for (let i = activeZombies.length - 1; i >= 0; i--) {
             const z = activeZombies[i];
-            spawnSmokeParticle(z.mesh.position.x, z.mesh.position.y + 0.5, z.mesh.position.z, 0xff7700);
+            spawnSmokeParticle(z.mesh.position.x, z.mesh.position.y + 1.0, z.mesh.position.z, 0xff7700);
             scene.remove(z.mesh);
             activeZombies.splice(i, 1);
         }
@@ -348,7 +349,8 @@ function updateZombiesLoop() {
             z.mesh.position.z += Math.sin(angle) * ZOMBIE_SPEED;
             z.mesh.rotation.y = -angle - Math.PI/2;
 
-            if (distanceToPlayer < 1.3 && Math.abs(camera.position.y - (z.mesh.position.y + 0.6)) < 1.5) {
+            // Collision check values expanded horizontally and vertically to match the 2x giant size scale
+            if (distanceToPlayer < 2.0 && Math.abs(camera.position.y - (z.mesh.position.y + 1.2)) < 2.5) {
                 playSound('hurt');
                 playerVelocityY = 0.06; 
                 camera.position.x += Math.cos(angle) * 0.8;
@@ -358,7 +360,7 @@ function updateZombiesLoop() {
 
         z.mesh.position.x = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.x));
         z.mesh.position.z = Math.max(2, Math.min(WORLD_SIZE - 2, z.mesh.position.z));
-        z.mesh.position.y = getGroundYAt(z.mesh.position.x, z.mesh.position.z) + 0.375;
+        z.mesh.position.y = getGroundYAt(z.mesh.position.x, z.mesh.position.z) + 0.75;
     });
 }
 
@@ -647,7 +649,7 @@ function handleBlockAction(isPlacement) {
             if (zombieTarget) {
                 playSound('break');
                 zombieTarget.hitpoints -= 1;
-                spawnBlockBreakParticles(zombieTarget.mesh.position.x, zombieTarget.mesh.position.y + 0.5, zombieTarget.mesh.position.z, 0x16a34a);
+                spawnBlockBreakParticles(zombieTarget.mesh.position.x, zombieTarget.mesh.position.y + 1.0, zombieTarget.mesh.position.z, 0x16a34a);
                 if (zombieTarget.hitpoints <= 0) {
                     playSound('death'); scene.remove(zombieTarget.mesh);
                     activeZombies = activeZombies.filter(z => z !== zombieTarget);

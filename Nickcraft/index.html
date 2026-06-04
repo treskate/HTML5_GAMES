@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
+    <!-- Standard Browser & Saved Mobile Web App Favicon Configurations -->
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="apple-touch-icon" href="favicon.png">
     
@@ -30,8 +31,8 @@
         
         .touch-zone { position: absolute; z-index: 15; }
         
-        /* Square Mobile D-Pad */
-        #dpad-container { bottom: 60px; left: 35px; width: 252px; height: 252px; display: grid; grid-template-columns: repeat(3, 84px); grid-template-rows: repeat(3, 84px); background: transparent; }
+        /* Square Mobile D-Pad - Moved up slightly from bottom: 60px to bottom: 85px */
+        #dpad-container { bottom: 85px; left: 35px; width: 252px; height: 252px; display: grid; grid-template-columns: repeat(3, 84px); grid-template-rows: repeat(3, 84px); background: transparent; }
         .dpad-btn { width: 80px; height: 80px; background: rgba(115, 122, 110, 0.75); border: 5px solid #282c24; border-bottom-width: 8px; border-radius: 0px; box-shadow: inset 0px 4px 0px rgba(255,255,255,0.2), 0px 5px 8px rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; }
         .dpad-btn:active { background: rgba(75, 80, 70, 0.9); border-bottom-width: 5px; transform: translateY(3px); box-shadow: inset 0px 2px 4px rgba(0,0,0,0.4); }
         
@@ -62,7 +63,7 @@
 
     <div id="ui-header">
         <h1>Nickcraft</h1>
-        <p>Axe Hunt Animals & Zombies | Hold JUMP to Swim in Pools</p>
+        <p>Axe Hunt Animals & Zombies</p>
     </div>
     
     <div id="crosshair"></div>
